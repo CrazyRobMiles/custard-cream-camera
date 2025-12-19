@@ -1,3 +1,11 @@
 picamera2
 opencv-python
 numpy
+
+sounddevice
+soundfile
+SpeechRecognition
+whisper
+
+# Optional: Google GenAI Python SDK (for transcription)
+google-generativeai

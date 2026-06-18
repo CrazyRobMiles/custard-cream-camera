@@ -10,9 +10,11 @@ ILI9486_RAMWR  = 0x2C
 ILI9486_PIXFMT = 0x3A
 ILI9486_SLPOUT = 0x11
 ILI9486_DISPON = 0x29
+import numpy as np
+
 
 # Fixed working MADCTL for your panel (you confirmed this fills the whole screen)
-MADCTL_E8 = 0xC8  # MX | MY | MV | BGR
+MADCTL_E8 = 0x88  # MX | MY | MV | BGR
 
 class ILI9486FullScreen:
     # Controller-native portrait framebuffer that maps to your full glass
@@ -85,7 +87,7 @@ class ILI9486FullScreen:
         self._cmd(ILI9486_RAMWR)
 
     @staticmethod
-    def _rgb888_to_rgb565(img: Image.Image) -> bytearray:
+    def _rgb888_to_rgb565_old(img: Image.Image) -> bytearray:
         raw = img.tobytes()
         out = bytearray((len(raw) // 3) * 2)
         i = j = 0
@@ -97,6 +99,18 @@ class ILI9486FullScreen:
             i += 3
             j += 2
         return out
+
+    @staticmethod
+    def _rgb888_to_rgb565(img: Image.Image) -> bytes:
+        arr = np.asarray(img, dtype=np.uint8)
+
+        r = (arr[:, :, 0] >> 3).astype(np.uint16)
+        g = (arr[:, :, 1] >> 2).astype(np.uint16)
+        b = (arr[:, :, 2] >> 3).astype(np.uint16)
+
+        rgb565 = (r << 11) | (g << 5) | b
+        return rgb565.byteswap().tobytes()  # big-endian
+
 
     # ---------- Public API ----------
 

@@ -181,6 +181,7 @@ try:
                 # Save corrected image
                 img.save(fname, "JPEG", quality=95)
                 print(f"Captured {fname}")
+                picam2.switch_mode(preview_config)
 
 except KeyboardInterrupt:
     pass

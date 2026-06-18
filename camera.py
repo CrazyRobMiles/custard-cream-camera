@@ -11,7 +11,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 from ili9486_fullscreen import ILI9486FullScreen
 
-
 # ------------------------------------------------------------
 # Keyboard handling (non-blocking)
 # ------------------------------------------------------------
@@ -58,7 +57,6 @@ lcd = ILI9486FullScreen(
 
 lcd.clear((0, 0, 0))
 
-
 picam2 = Picamera2()
 
 camera_config = picam2.create_video_configuration(
@@ -71,7 +69,6 @@ camera_config = picam2.create_video_configuration(
 picam2.configure(camera_config)
 picam2.start()
 time.sleep(0.5)
-
 
 # ------------------------------------------------------------
 # Runtime state
@@ -87,7 +84,6 @@ save_dir = Path("captures")
 save_dir.mkdir(exist_ok=True)
 
 print("Controls: SPACE = shutter, Q = quit")
-
 
 # ------------------------------------------------------------
 # Main loop
@@ -123,7 +119,7 @@ try:
 
         # Convert + display
         buf = rgb888_to_rgb565_numpy(img)
-        lcd.show_raw_rgb565(buf)
+        lcd.show_landscape_480x320(img)
 
         # Keyboard input
         key = kbd.get_key()

@@ -68,6 +68,8 @@ kbd = Keyboard()
 
 tft = ILI9486FullScreen()
 
+tft.test_touch_screen()
+
 save_dir = Path("captures")
 save_dir.mkdir(exist_ok=True)
 

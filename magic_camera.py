@@ -66,8 +66,8 @@ class MagicCamera():
         self.screen = Screen()
 
         main_menu = (
-            Button(0,0,200,50,"Press",self.medium_font,(255,255,255),(0,0,0),None,None),
-            Button(210,0,200,50,"me",self.medium_font,(255,0,255),(0,0,255),None,None)
+            Button(0,0,200,50,"Click",self.medium_font,(255,255,255),(0,0,0),None,self.save_image),
+            Button(210,0,200,50,"Stop",self.medium_font,(255,0,255),(0,0,255),None,self.stop_running)
         )
         
         self.screen.menu.set_buttons(main_menu)
@@ -77,6 +77,10 @@ class MagicCamera():
         
         self.finder=None
         self.img = None
+        self.running = None
+        
+    def stop_running(self):
+        self.running = False
         
     def save_image(self):
         ts = time.strftime("New_%Y%m%d_%H%M%S")
@@ -108,9 +112,9 @@ class MagicCamera():
 
         
     def run(self):
-        
+        self.running = True
         try:
-            while True:
+            while self.running:
 
                 self.process_frame()
                 

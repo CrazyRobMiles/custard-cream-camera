@@ -100,7 +100,7 @@ class Button:
         
         if self.touch_up_pending:
             self.up()
-            self.touch_down_pending=False
+            self.touch_up_pending=False
             
 class Menu:
     

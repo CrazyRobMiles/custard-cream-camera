@@ -23,38 +23,36 @@ class Button:
     button_font = ImageFont.truetype(
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32
     )
-
-    def __init__(self, x, y, width,height,text,text_colour,back_colour,up_handler,down_handler):
+    
+    def __init__(self, x, y, width,height,text,font,text_colour,back_colour,up_handler,down_handler):
         self.x = x
         self.y = y
         self.height = height
         self.width = width
         self.text = text
+        self.font = font
         self.text_colour = text_colour
         self.back_colour = back_colour
         self.up_handler = up_handler
         self.down_handler = down_handler
         self.pressed = False
         self.enabled = False
+        self.touch_down_pending = False
+        self.touch_up_pending = False
         
     def draw(self, draw):
         
         if not self.enabled:
             return
         
-        text_colour = self.back_colour if self.pressed else self.text_colur
+        text_colour = self.back_colour if self.pressed else self.text_colour
         back_colour = self.text_colour if self.pressed else self.back_colour
-        draw.rectangle((self.x, self.y, 90, 20), fill=back_colour)
+        draw.rectangle((self.x, self.y, self.x+self.width, self.y+self.height), fill=back_colour)
         
-        bbox = draw.textbbox((0, 0), self.text, font=self.button_font)
-
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
+        text_x = self.x + (self.width  // 2)
+        text_y = self.y + (self.height // 2)
         
-        text_x = self.x + (self.width - text_w) // 2
-        text_y = self.y + (self.height - text_h) // 2
-        
-        draw.text((text_x, text_y), self.text, font=self.font, fill=text_colour)
+        draw.text((text_x, text_y), self.text, font=self.font, fill=text_colour,anchor="mm")
         
     def enable(self):
         self.enabled = True
@@ -79,6 +77,8 @@ class Button:
         if not self.enabled:
             return
         
+        self.pressed = False
+        
         print(f"Button: {self.text} released")
         if self.up_handler:
             self.up_handler()
@@ -87,23 +87,53 @@ class Button:
         if not self.enabled:
             return
 
+        self.pressed = True
+        
         print(f"Button: {self.text} pressed")
         if self.down_handler:
             self.down_handler()
             
+    def update(self):
+        if self.touch_down_pending:
+            self.down()
+            self.touch_down_pending=False
+        
+        if self.touch_up_pending:
+            self.up()
+            self.touch_down_pending=False
+            
 class Menu:
+    
+    min_touch_x=281
+    max_touch_x=3859
+    min_touch_y=3724
+    max_touch_y=243
     
     def touch_callback(self,pin):
         
         if GPIO.input(PENIRQ_PIN):
             print("Touch up")
+            # Use the down coordinates if the button is released
+            x = self.last_x
+            y = self.last_y
         else:
             print("Touch down")
-
-        x = self.touch_screen.read_channel(0xD0)
-        y = self.touch_screen.read_channel(0x90)
+            # Read the touch input
+            raw_y = self.touch_screen.read_channel(0xD0)
+            raw_x = self.touch_screen.read_channel(0x90)
+            
+            x_range = self.max_touch_x - self.min_touch_x
+            x = int(((raw_x - self.min_touch_x)/x_range)*480)
+            self.last_x = x
+            
+            y_range = self.min_touch_y - self.max_touch_y
+            raw_y = raw_y - self.max_touch_y
+            raw_y = y_range - raw_y
+            y = int((raw_y/y_range)*320)
+            self.last_y = y
         
         print(f"Button callback x:{x} y:{y}")
+
         for button in self.buttons:
             if button.check_coord(x,y):
                 if GPIO.input(PENIRQ_PIN):
@@ -124,6 +154,15 @@ class Menu:
             bouncetime=20
         )        
 
+        x_range=self.max_touch_x-self.min_touch_x
+        self.x_factor = x_range/480
+        
+        y_range=self.max_touch_y-self.min_touch_y
+        self.y_factor = y_range/320
+        
+        self.last_x = None
+        self.last_y = None
+
     def draw(self,draw):
         for button in self.buttons:
             button.draw(draw)
@@ -134,6 +173,10 @@ class Menu:
         self.buttons = buttons
         for button in self.buttons:
             button.enable()
+            
+    def update(self):
+        for button in self.buttons:
+            button.update()
         
 class XPT2046:
 
@@ -304,3 +347,13 @@ class Screen:
 
         # Stream pixel data
         self._data_chunked(buf)
+        
+    def update(self):
+        self.menu.update()
+        
+    def draw(self,img):
+        draw = ImageDraw.Draw(img)
+        self.menu.draw(draw)
+        self.show_landscape_480x320(img)
+
+        

@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
-from ii9486_manager import Screen
+from ii9486_manager import Screen,Menu,Button
 import termios
 import sys
 import select
@@ -8,6 +8,7 @@ import tty
 import numpy as np
 from picamera2 import Picamera2
 from pathlib import Path
+from threading import Event
  
 # ------------------------------------------------------------
 # Keyboard handling (non-blocking)
@@ -29,12 +30,13 @@ class Keyboard:
 
 
 class MagicCamera():
+    
     def __init__(self):
         # Load three font sizes
         self.small_font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16
         )
-
+        
         self.medium_font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32
         )
@@ -54,13 +56,27 @@ class MagicCamera():
 
         self.picam2.configure(camera_config)
         self.picam2.start()
-
+        
+        self.frame_ready = Event()
+        
+        self.request_next_frame()
+        
         self.kbd = Keyboard() 
 
         self.screen = Screen()
 
+        main_menu = (
+            Button(0,0,200,50,"Press",self.medium_font,(255,255,255),(0,0,0),None,None),
+            Button(210,0,200,50,"me",self.medium_font,(255,0,255),(0,0,255),None,None)
+        )
+        
+        self.screen.menu.set_buttons(main_menu)
+
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
+        
+        self.finder=None
+        self.img = None
         
     def save_image(self):
         ts = time.strftime("New_%Y%m%d_%H%M%S")
@@ -68,23 +84,34 @@ class MagicCamera():
         self.img.save(fname, "JPEG", quality=95)
         print(f"Saved {fname}")
         
+    def request_next_frame(self):
+        self.pending_job = self.picam2.capture_request(
+            wait=False,
+            signal_function=lambda job: self.frame_ready.set()
+        )
+
     def process_frame(self):
 
-        frame = self.picam2.capture_array()
-        self.img = Image.fromarray(frame, "RGB")
-        finder = self.img.resize((480, 320))
+        if self.frame_ready.is_set():
+            self.frame_ready.clear()
+            request = self.picam2.wait(self.pending_job)
+            frame = request.make_array("main")
+            request.release()
+            
+            self.img = Image.fromarray(frame, "RGB")
+            self.finder = self.img.resize((480, 320))
+            
+            self.request_next_frame()
 
-        draw = ImageDraw.Draw(finder)
-        draw.text((10, 10), "Hello World", font=self.small_font, fill="red")
-        draw.text((10, 40), "Hello World", font=self.medium_font, fill="green")
-        draw.text((10, 90), "Hello World", font=self.large_font, fill="blue")
+        if self.finder != None:
+            self.screen.draw(self.finder)
 
-        self.screen.show_landscape_480x320(finder)
         
     def run(self):
         
         try:
             while True:
+
                 self.process_frame()
                 
                 key = self.kbd.get_key()
@@ -93,6 +120,8 @@ class MagicCamera():
                         return
                     elif key == " ":
                         self.save_image()
+                        
+                
     
         except KeyboardInterrupt:
             pass

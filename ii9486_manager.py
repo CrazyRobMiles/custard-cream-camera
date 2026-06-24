@@ -72,7 +72,7 @@ class Button:
         
         return True
         
-    def up(self):
+    def do_up(self):
         
         if not self.enabled:
             return
@@ -83,7 +83,7 @@ class Button:
         if self.up_handler:
             self.up_handler()
     
-    def down(self):
+    def do_down(self):
         if not self.enabled:
             return
 
@@ -93,14 +93,34 @@ class Button:
         if self.down_handler:
             self.down_handler()
             
+    def set_up(self):
+        
+        if not self.enabled:
+            return
+        
+        self.touch_up_pending=True
+        
+    def set_down(self):
+        
+        if not self.enabled:
+            return
+        
+        self.touch_down_pending=True
+            
     def update(self):
+        dirty = False
+        
         if self.touch_down_pending:
-            self.down()
+            dirty=True
+            self.do_down()
             self.touch_down_pending=False
         
         if self.touch_up_pending:
-            self.up()
+            dirty=True
+            self.do_up()
             self.touch_up_pending=False
+            
+        return dirty
             
 class Menu:
     
@@ -137,9 +157,9 @@ class Menu:
         for button in self.buttons:
             if button.check_coord(x,y):
                 if GPIO.input(PENIRQ_PIN):
-                    button.up()
+                    button.set_up()
                 else:
-                    button.down()
+                    button.set_down()
 
     def __init__(self, touch_screen):
         self.touch_screen = touch_screen
@@ -175,8 +195,11 @@ class Menu:
             button.enable()
             
     def update(self):
+        dirty = False
         for button in self.buttons:
-            button.update()
+            if button.update():
+                dirty=True
+        return dirty
         
 class XPT2046:
 
@@ -349,7 +372,7 @@ class Screen:
         self._data_chunked(buf)
         
     def update(self):
-        self.menu.update()
+        return self.menu.update()
         
     def draw(self,img):
         draw = ImageDraw.Draw(img)

@@ -48,15 +48,23 @@ class MagicCamera():
         self.picam2 = Picamera2()
 
         camera_config = self.picam2.create_video_configuration(
-            main={"size": (4056, 3040 ), "format": "BGR888"},
+            main={"size": (400, 320 ), "format": "BGR888"},
             controls={
                 "FrameRate": 30
             }
         ) 
 
-        self.picam2.configure(camera_config)
+        self.preview_config = self.picam2.create_preview_configuration(
+            main={"size": (480, 320), "format": "BGR888"}
+        )
+
+        self.still_config = self.picam2.create_still_configuration(
+            main={"size": (4056, 3040), "format": "BGR888"}
+        )
+
+        self.picam2.configure(self.preview_config)
         self.picam2.start()
-        
+
         self.frame_ready = Event()
         
         self.request_next_frame()
@@ -85,7 +93,7 @@ class MagicCamera():
     def save_image(self):
         ts = time.strftime("New_%Y%m%d_%H%M%S")
         fname = self.save_dir / f"capture_{ts}.jpg"
-        self.img.save(fname, "JPEG", quality=95)
+        self.picam2.switch_mode_and_capture_file(self.still_config, str(fname))
         print(f"Saved {fname}")
         
     def request_next_frame(self):
@@ -95,6 +103,8 @@ class MagicCamera():
         )
 
     def process_frame(self):
+        
+        dirty = False
 
         if self.frame_ready.is_set():
             self.frame_ready.clear()
@@ -102,14 +112,18 @@ class MagicCamera():
             frame = request.make_array("main")
             request.release()
             
-            self.img = Image.fromarray(frame, "RGB")
-            self.finder = self.img.resize((480, 320))
+            self.finder = Image.fromarray(frame, "RGB")
+
+            dirty = True
             
             self.request_next_frame()
+            
+        if self.screen.update():
+            dirty=True
 
-        if self.finder != None:
-            self.screen.draw(self.finder)
-
+        if dirty:
+            if self.finder != None:
+                self.screen.draw(self.finder)
         
     def run(self):
         self.running = True
@@ -125,8 +139,6 @@ class MagicCamera():
                     elif key == " ":
                         self.save_image()
                         
-                
-    
         except KeyboardInterrupt:
             pass
         finally:   

@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
-from ii9486_manager import Screen,Menu,Button
+from display import Menu, Button
+from ii9486_manager import Screen
 import termios
 import sys
 import select
@@ -70,12 +71,16 @@ class MagicCamera():
         self.request_next_frame()
         
         self.kbd = Keyboard() 
+        
+        self.menu = Menu()
 
-        self.screen = Screen()
+        self.screen = Screen(self.menu)
+        
+        button_y = self.screen.DISPLAY_HEIGHT - 50
 
         main_menu = (
-            Button(0,0,200,50,"Click",self.medium_font,(255,255,255),(0,0,0),None,self.save_image),
-            Button(210,0,200,50,"Stop",self.medium_font,(255,0,255),(0,0,255),None,self.stop_running)
+            Button(0,button_y,200,50,"Click",self.medium_font,(255,255,255),(0,0,0),None,self.save_image),
+            Button(210,button_y,200,50,"Stop",self.medium_font,(255,0,255),(0,0,255),None,self.stop_running)
         )
         
         self.screen.menu.set_buttons(main_menu)
@@ -86,15 +91,17 @@ class MagicCamera():
         self.finder=None
         self.img = None
         self.running = None
+        self.save_file_name = None
         
     def stop_running(self):
+        print("Doing Stop action")
         self.running = False
         
     def save_image(self):
-        ts = time.strftime("New_%Y%m%d_%H%M%S")
-        fname = self.save_dir / f"capture_{ts}.jpg"
-        self.picam2.switch_mode_and_capture_file(self.still_config, str(fname))
-        print(f"Saved {fname}")
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        self.save_file_name = self.save_dir / f"capture_{ts}.jpg"
+        self.picam2.switch_mode_and_capture_file(self.still_config, str(self.save_file_name))
+        print(f"Saved {self.save_file_name}")
         
     def request_next_frame(self):
         self.pending_job = self.picam2.capture_request(
@@ -142,6 +149,7 @@ class MagicCamera():
         except KeyboardInterrupt:
             pass
         finally:   
+            print("System stopping:tidying up")
             self.screen.close()
             self.kbd.close()
             self.picam2.stop()

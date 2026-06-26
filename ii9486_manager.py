@@ -17,153 +17,24 @@ MADCTL_E8 = 0x88
 
 PENIRQ_PIN = 17
 
+class Touch:
 
-class Button:
-
-    button_font = ImageFont.truetype(
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32
-    )
-    
-    def __init__(self, x, y, width,height,text,font,text_colour,back_colour,up_handler,down_handler):
-        self.x = x
-        self.y = y
-        self.height = height
-        self.width = width
-        self.text = text
-        self.font = font
-        self.text_colour = text_colour
-        self.back_colour = back_colour
-        self.up_handler = up_handler
-        self.down_handler = down_handler
-        self.pressed = False
-        self.enabled = False
-        self.touch_down_pending = False
-        self.touch_up_pending = False
-        
-    def draw(self, draw):
-        
-        if not self.enabled:
-            return
-        
-        text_colour = self.back_colour if self.pressed else self.text_colour
-        back_colour = self.text_colour if self.pressed else self.back_colour
-        draw.rectangle((self.x, self.y, self.x+self.width, self.y+self.height), fill=back_colour)
-        
-        text_x = self.x + (self.width  // 2)
-        text_y = self.y + (self.height // 2)
-        
-        draw.text((text_x, text_y), self.text, font=self.font, fill=text_colour,anchor="mm")
-        
-    def enable(self):
-        self.enabled = True
-        
-    def disable(self):
-        self.enabled = False
-        
-    def check_coord(self,x,y):
-        
-        if not self.enabled:
-            return False
-        
-        if x<self.x: return False
-        if y<self.y: return False
-        if x>(self.x+self.width): return False
-        if y>(self.y+self.height): return False
-        
-        return True
-        
-    def do_up(self):
-        
-        if not self.enabled:
-            return
-        
-        self.pressed = False
-        
-        print(f"Button: {self.text} released")
-        if self.up_handler:
-            self.up_handler()
-    
-    def do_down(self):
-        if not self.enabled:
-            return
-
-        self.pressed = True
-        
-        print(f"Button: {self.text} pressed")
-        if self.down_handler:
-            self.down_handler()
-            
-    def set_up(self):
-        
-        if not self.enabled:
-            return
-        
-        self.touch_up_pending=True
-        
-    def set_down(self):
-        
-        if not self.enabled:
-            return
-        
-        self.touch_down_pending=True
-            
-    def update(self):
-        dirty = False
-        
-        if self.touch_down_pending:
-            dirty=True
-            self.do_down()
-            self.touch_down_pending=False
-        
-        if self.touch_up_pending:
-            dirty=True
-            self.do_up()
-            self.touch_up_pending=False
-            
-        return dirty
-            
-class Menu:
-    
-    min_touch_x=281
-    max_touch_x=3859
-    min_touch_y=3724
-    max_touch_y=243
-    
     def touch_callback(self,pin):
         
         if GPIO.input(PENIRQ_PIN):
-            print("Touch up")
-            # Use the down coordinates if the button is released
-            x = self.last_x
-            y = self.last_y
+            if self.touch_handler != None:
+                self.touch_handler(False,None,None)
         else:
-            print("Touch down")
             # Read the touch input
-            raw_y = self.touch_screen.read_channel(0xD0)
-            raw_x = self.touch_screen.read_channel(0x90)
-            
-            x_range = self.max_touch_x - self.min_touch_x
-            x = int(((raw_x - self.min_touch_x)/x_range)*480)
-            self.last_x = x
-            
-            y_range = self.min_touch_y - self.max_touch_y
-            raw_y = raw_y - self.max_touch_y
-            raw_y = y_range - raw_y
-            y = int((raw_y/y_range)*320)
-            self.last_y = y
-        
-        print(f"Button callback x:{x} y:{y}")
+            raw_y = self.read_channel(0xD0)
+            raw_x = self.read_channel(0x90)
+            self.touch_handler(True,raw_x,raw_y)
 
-        for button in self.buttons:
-            if button.check_coord(x,y):
-                if GPIO.input(PENIRQ_PIN):
-                    button.set_up()
-                else:
-                    button.set_down()
-
-    def __init__(self, touch_screen):
-        self.touch_screen = touch_screen
-        self.buttons = []
+    def __init__(self, bus=0, device=1):
+        self.spi = spidev.SpiDev()
+        self.spi.open(bus, device)
+        self.spi.max_speed_hz = 2000000
+        self.touch_handler = None
         
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(PENIRQ_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)        
@@ -173,40 +44,9 @@ class Menu:
             callback=self.touch_callback,
             bouncetime=20
         )        
-
-        x_range=self.max_touch_x-self.min_touch_x
-        self.x_factor = x_range/480
         
-        y_range=self.max_touch_y-self.min_touch_y
-        self.y_factor = y_range/320
-        
-        self.last_x = None
-        self.last_y = None
-
-    def draw(self,draw):
-        for button in self.buttons:
-            button.draw(draw)
-            
-    def set_buttons(self,buttons):
-        for button in self.buttons:
-            button.disable()
-        self.buttons = buttons
-        for button in self.buttons:
-            button.enable()
-            
-    def update(self):
-        dirty = False
-        for button in self.buttons:
-            if button.update():
-                dirty=True
-        return dirty
-        
-class XPT2046:
-
-    def __init__(self, bus=0, device=1):
-        self.spi = spidev.SpiDev()
-        self.spi.open(bus, device)
-        self.spi.max_speed_hz = 2000000
+    def set_touch_handler(self,touch_handler):
+        self.touch_handler = touch_handler
         
     def read_channel(self, command):
         result = self.spi.xfer2([command, 0, 0])
@@ -224,7 +64,8 @@ class Screen:
     DISPLAY_HEIGHT = 320
     DISPLAY_WIDTH = 480
 
-    def __init__(self, dc_pin=24, reset_pin=25, spi_bus=0, spi_device=0, spi_speed=16_000_000):
+    def __init__(self, menu, dc_pin=24, reset_pin=25, spi_bus=0, spi_device=0, spi_speed=16_000_000):
+        self.menu = menu
         self.dc = dc_pin
         self.rst = reset_pin
 
@@ -242,8 +83,8 @@ class Screen:
         self._init_display()
         self._set_mode_and_full_window()
         
-        self.touch_screen = XPT2046()
-        self.menu = Menu(self.touch_screen)
+        self.touch_screen = Touch()
+        self.touch_screen.set_touch_handler(self.menu.touch_handler)
         
     def test_touch_screen(self):
         while True:

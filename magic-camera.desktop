@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Magic Camera
+Comment=Camera viewfinder with Nanobanana editing
+Exec=/home/rob/nanobanana-camera/run_magic_camera.sh
+Icon=camera-photo
+Terminal=true
+Categories=Utility;Photography;

@@ -8,29 +8,39 @@ from .widgets import ButtonPanel
 
 
 class HDMIDesktopDisplay(BaseDisplay):
-    """Displays frames in a plain window via Tkinter.
+    """Displays frames in a window via Tkinter (fullscreen by default).
 
-    No fullscreen mode-switching and no video driver selection - it just opens an ordinary
-    window through whatever windowing system the desktop is already using, the same as any
-    other desktop app. Simpler and more portable than HDMIPygameDisplay, at the cost of a
-    little draw performance.
+    No SDL video driver selection - it just opens an ordinary window through whatever
+    windowing system the desktop is already using, the same as any other desktop app.
+    Simpler and more portable than HDMIPygameDisplay, at the cost of a little draw performance.
     """
 
     WIDTH = 480
     HEIGHT = 320
 
-    def __init__(self, scale=1):
+    def __init__(self, fullscreen=True, scale=1):
         super().__init__()
-
-        self.scale = scale
 
         self.root = tk.Tk()
         self.root.title("Magic Camera")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.bind("<Escape>", lambda event: self._on_close())
+        self.root.configure(bg="black")
 
-        self.label = tk.Label(self.root)
-        self.label.pack()
+        if fullscreen:
+            self.root.attributes("-fullscreen", True)
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+            self.scale = min(screen_w / self.WIDTH, screen_h / self.HEIGHT)
+        else:
+            self.scale = scale
+
+        # place() rather than pack(): centers the (possibly letterboxed) image within the
+        # window regardless of whether the window is the image's own size (windowed mode)
+        # or the whole screen (fullscreen), with no offset math needed for click handling -
+        # event.x/event.y are already relative to the label's own top-left corner.
+        self.label = tk.Label(self.root, bg="black", bd=0, highlightthickness=0)
+        self.label.place(relx=0.5, rely=0.5, anchor="center")
         self.label.bind("<Button-1>", self._on_press)
         self.label.bind("<ButtonRelease-1>", self._on_release)
 

@@ -1,0 +1,17 @@
+{
+    "display": {
+        "type": "ili9486",
+        "ili9486": {
+            "dc_pin": 24,
+            "reset_pin": 25,
+            "spi_bus": 0,
+            "spi_device": 0,
+            "spi_speed": 16000000
+        },
+        "hdmi": {
+            "fullscreen": true,
+            "window_width": 800,
+            "window_height": 480
+        }
+    }
+}

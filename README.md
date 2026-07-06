@@ -8,35 +8,24 @@ Raspberry Pi HQ Camera using `picamera2` and displays it on an LCD panel. You ca
 
 # Setting Up the Python Virtual Environment on Raspberry Pi OS
 
-This project uses a Python virtual environment to isolate its Python dependencies from the operating system. The virtual environment is configured to use Raspberry Pi OS system packages, which allows access to hardware-specific libraries such as Picamera2 and libcamera while keeping project-specific packages separate.
+This project always runs inside a Python virtual environment — everything below happens in a `venv`, nothing is installed into the system Python. The only wrinkle on a Raspberry Pi is `picamera2`.
 
 ## Why Use `--system-site-packages`?
 
-Some Raspberry Pi libraries are supplied by the operating system rather than PyPI. Examples include:
+Almost every dependency (`pillow`, `numpy`, `spidev`, `RPi.GPIO`, `pygame`) is a normal PyPI package and installs fine into any plain venv via `requirements.txt` — no apt packages needed for those.
 
-* Picamera2
-* libcamera
-* GPIO libraries
-* Other hardware-specific packages
-
-A standard virtual environment cannot see these packages. Creating the virtual environment with the `--system-site-packages` option allows the project to use them while still isolating any additional Python packages installed with `pip`.
+`picamera2` is the one exception. It's built on top of `libcamera`, which talks directly to the Pi's camera ISP and tuning files, and is not published as a portable pip wheel — it has to be the OS build from `apt` so it matches your kernel and camera stack. A plain (isolated) venv can't see that OS-installed package, so we create the venv with `--system-site-packages`: this lets the venv see the apt-installed `picamera2`/`libcamera`, while every other package still installs normally and independently via `pip`.
 
 ## Installing System Packages
 
-Install system packages (Raspberry Pi OS / Debian-like):
+Install `picamera2` and its `libcamera` dependency (Raspberry Pi OS / Debian-like):
 
 ```bash
 sudo apt update
 sudo apt install -y \
 	python3-picamera2 \
-	python3-opencv \
-	python3-numpy \
-	ffmpeg \
-	libsndfile1 \
-	alsa-utils \
-	pulseaudio
-    python3-venv \
-    python3-libcamera
+	python3-libcamera \
+	python3-venv
 ```
 
 ## Creating the Virtual Environment
@@ -364,10 +353,27 @@ Both commands should complete without errors. Enable the camera stack (libcamera
 Once the virtual environment has been activated:
 
 ```bash
-python my_program.py
+python magic_camera.py
 ```
 
-Replace `my_program.py` with the name of your application.
+## Display backends
+
+`magic_camera.py` renders through a pluggable display layer in [displays/](displays/). Two backends are provided:
+
+* `ili9486` — the SPI ILI9486 LCD + XPT2046 touch panel ([displays/ili9486_display.py](displays/ili9486_display.py))
+* `hdmi` — a window on a native HDMI/desktop display, using the mouse for touch input ([displays/hdmi_display.py](displays/hdmi_display.py))
+
+Select the backend and tune its pins/window size in [settings.json](settings.json):
+
+```json
+{
+    "display": {
+        "type": "ili9486"
+    }
+}
+```
+
+Set `"type"` to `"hdmi"` to run on a desktop with a native HDMI display instead.
 
 ## Deactivating the Virtual Environment
 
@@ -398,92 +404,3 @@ python -m pip install -r requirements.txt
 * Add `venv/` to `.gitignore`.
 * The `requirements.txt` file should contain only packages installed via `pip`.
 * Raspberry Pi OS packages such as Picamera2 should be installed using `apt`, not added to `requirements.txt`.
-
-
-1) Install system packages (Raspberry Pi OS / Debian-like):
-
-```bash
-sudo apt update
-sudo apt install -y python3-picamera2 python3-opencv python3-numpy ffmpeg libsndfile1 alsa-utils pulseaudio
-```
-
-Notes:
-- `ffmpeg` and `libsndfile1` are useful/required for audio handling and some STT backends.
-- On some Pi images `python3-picamera2` and `python3-opencv` are preferred from apt.
-
-2) Install Python packages. A minimal install uses `requirements.txt`:
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
-The repository's `requirements.txt` includes core deps (picamera2, OpenCV, numpy)
-and optional audio/STT packages. If you prefer to install audio/ASR packages
-manually, run:
-
-```bash
-python3 -m pip install sounddevice soundfile SpeechRecognition
-```
-
-Optional: Whisper (local) for offline transcription
-- Whisper provides good local transcription but requires PyTorch and can be
-	large on disk. Install only if you need offline STT and have the resources:
-
-```bash
-python3 -m pip install -U openai-whisper
-# Follow PyTorch install instructions for your platform: https://pytorch.org/get-started/locally/
-```
-
-Optional: Google GenAI (recommended for cloud transcription)
-- If you'd like to use Google's GenAI transcription, install the Python SDK and
-	set an API key in the environment. The package name and API surface may
-	change over time; the instructions below reflect common usage.
-
-```bash
-python3 -m pip install google-generativeai
-export GOOGLE_API_KEY="your-google-genai-api-key"
-# or set GOOGLE_GENAI_API_KEY
-```
-
-The `main.py` will try Google GenAI transcription first when one of the
-environment variables above is set, then fall back to Whisper (local) and
-finally to the online Google SpeechRecognition adapter.
-
-3) Run the app
-
-```bash
-python3 main.py          # normal camera preview
-python3 main.py --voice  # capture one frame, record audio, transcribe, apply spoken commands
-python3 main.py --voice --record-secs 6  # increase recording time
-```
-
-Audio / Microphone notes
-- The `--voice` mode records from the default system microphone using
-	`sounddevice`. Make sure ALSA/PulseAudio are configured and the microphone
-	is available. Use `arecord -l` or `pactl list sources` to inspect devices.
-- If `openai-whisper` is installed the code will try Whisper first (local).
-	Otherwise it falls back to online Google recognition via `SpeechRecognition`.
-
-Voice command examples
-- Say simple commands like:
-	- "grayscale" or "convert to grayscale"
-	- "blur 7" (odd integer kernel)
-	- "edges" or "canny"
-	- "rotate 90" or "rotate -90"
-	- "flip horizontal" or "flip vertical"
-	- "resize 640x480"
-	- "save processed.jpg"
-
-Troubleshooting
-- If `sounddevice` fails to open the microphone, ensure your user has access
-	to ALSA/PulseAudio and test with `arecord`.
-- Whisper requires a working PyTorch/ffmpeg setup; if transcription fails,
-	the code prints errors and attempts the fallback.
-
-Headless usage
-- If you run on a headless Pi, either use a virtual display (Xvfb) or modify
-	the code to save processed frames to disk or stream them elsewhere.
-
-License / Notes
-- See source files for usage and behavior. If you want, I can add a short
-	troubleshooting section for common Pi microphone issues.

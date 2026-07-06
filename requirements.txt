@@ -1,9 +1,6 @@
 picamera2
-opencv-python
-numpy
-sounddevice
-soundfile
-SpeechRecognition
-whisper
-google-genai
 pillow
+numpy
+spidev
+RPi.GPIO
+pygame

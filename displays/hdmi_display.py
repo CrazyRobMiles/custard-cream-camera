@@ -1,0 +1,74 @@
+import pygame
+from PIL import ImageDraw
+
+from .base import BaseDisplay
+from .widgets import ButtonPanel
+
+
+class HDMIDisplay(BaseDisplay):
+    """Displays frames in a window on a native HDMI / desktop output, using the mouse for touch input."""
+
+    WIDTH = 480
+    HEIGHT = 320
+
+    def __init__(self, fullscreen=True, window_width=800, window_height=480):
+        super().__init__()
+
+        pygame.init()
+        pygame.mouse.set_visible(not fullscreen)
+
+        flags = pygame.FULLSCREEN if fullscreen else 0
+        self.surface = pygame.display.set_mode((window_width, window_height), flags)
+        pygame.display.set_caption("Magic Camera")
+
+        self.buttons = ButtonPanel()
+        self._update_scaling()
+
+    def _update_scaling(self):
+        surface_w, surface_h = self.surface.get_size()
+        self.scale = min(surface_w / self.WIDTH, surface_h / self.HEIGHT)
+        self.scaled_size = (int(self.WIDTH * self.scale), int(self.HEIGHT * self.scale))
+        self.offset = (
+            (surface_w - self.scaled_size[0]) // 2,
+            (surface_h - self.scaled_size[1]) // 2,
+        )
+
+    def _window_to_logical(self, pos):
+        x = (pos[0] - self.offset[0]) / self.scale
+        y = (pos[1] - self.offset[1]) / self.scale
+        return x, y
+
+    # ---------- BaseDisplay interface ----------
+
+    def set_buttons(self, buttons):
+        self.buttons.set_buttons(buttons)
+
+    def update(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.quit_requested = True
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                x, y = self._window_to_logical(event.pos)
+                self.buttons.press(x, y)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                x, y = self._window_to_logical(event.pos)
+                self.buttons.release(x, y)
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.quit_requested = True
+
+        return self.buttons.update()
+
+    def draw(self, img):
+        draw = ImageDraw.Draw(img)
+        self.buttons.draw(draw)
+
+        img = img.convert("RGB")
+        frame = pygame.image.frombuffer(img.tobytes(), img.size, "RGB")
+        frame = pygame.transform.smoothscale(frame, self.scaled_size)
+
+        self.surface.fill((0, 0, 0))
+        self.surface.blit(frame, self.offset)
+        pygame.display.flip()
+
+    def close(self):
+        pygame.quit()

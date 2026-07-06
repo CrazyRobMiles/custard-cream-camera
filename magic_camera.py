@@ -1,16 +1,25 @@
-from PIL import Image, ImageDraw, ImageFont
-from display import Menu, Button
-from ii9486_manager import Screen
-import termios
-import sys
+import json
 import select
+import sys
+import termios
 import time
 import tty
-import numpy as np
-from picamera2 import Picamera2
 from pathlib import Path
 from threading import Event
- 
+
+from PIL import Image, ImageFont
+from picamera2 import Picamera2
+
+from displays import Button, create_display
+
+SETTINGS_PATH = Path(__file__).parent / "settings.json"
+
+
+def load_settings():
+    with open(SETTINGS_PATH) as f:
+        return json.load(f)
+
+
 # ------------------------------------------------------------
 # Keyboard handling (non-blocking)
 # ------------------------------------------------------------
@@ -31,13 +40,15 @@ class Keyboard:
 
 
 class MagicCamera():
-    
+
     def __init__(self):
+        settings = load_settings()
+
         # Load three font sizes
         self.small_font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16
         )
-        
+
         self.medium_font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32
         )
@@ -45,15 +56,8 @@ class MagicCamera():
         self.large_font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 48
         )
- 
-        self.picam2 = Picamera2()
 
-        camera_config = self.picam2.create_video_configuration(
-            main={"size": (400, 320 ), "format": "BGR888"},
-            controls={
-                "FrameRate": 30
-            }
-        ) 
+        self.picam2 = Picamera2()
 
         self.preview_config = self.picam2.create_preview_configuration(
             main={"size": (480, 320), "format": "BGR888"}
@@ -67,42 +71,40 @@ class MagicCamera():
         self.picam2.start()
 
         self.frame_ready = Event()
-        
-        self.request_next_frame()
-        
-        self.kbd = Keyboard() 
-        
-        self.menu = Menu()
 
-        self.screen = Screen(self.menu)
-        
-        button_y = self.screen.DISPLAY_HEIGHT - 50
+        self.request_next_frame()
+
+        self.kbd = Keyboard()
+
+        self.screen = create_display(settings)
+
+        button_y = self.screen.HEIGHT - 50
 
         main_menu = (
-            Button(0,button_y,200,50,"Click",self.medium_font,(255,255,255),(0,0,0),None,self.save_image),
-            Button(210,button_y,200,50,"Stop",self.medium_font,(255,0,255),(0,0,255),None,self.stop_running)
+            Button(0, button_y, 200, 50, "Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
+            Button(210, button_y, 200, 50, "Stop", self.medium_font, (255, 0, 255), (0, 0, 255), None, self.stop_running)
         )
-        
-        self.screen.menu.set_buttons(main_menu)
+
+        self.screen.set_buttons(main_menu)
 
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
-        
-        self.finder=None
+
+        self.finder = None
         self.img = None
         self.running = None
         self.save_file_name = None
-        
+
     def stop_running(self):
         print("Doing Stop action")
         self.running = False
-        
+
     def save_image(self):
         ts = time.strftime("%Y%m%d_%H%M%S")
         self.save_file_name = self.save_dir / f"capture_{ts}.jpg"
         self.picam2.switch_mode_and_capture_file(self.still_config, str(self.save_file_name))
         print(f"Saved {self.save_file_name}")
-        
+
     def request_next_frame(self):
         self.pending_job = self.picam2.capture_request(
             wait=False,
@@ -110,7 +112,7 @@ class MagicCamera():
         )
 
     def process_frame(self):
-        
+
         dirty = False
 
         if self.frame_ready.is_set():
@@ -118,45 +120,50 @@ class MagicCamera():
             request = self.picam2.wait(self.pending_job)
             frame = request.make_array("main")
             request.release()
-            
+
             self.finder = Image.fromarray(frame, "RGB")
 
             dirty = True
-            
+
             self.request_next_frame()
-            
+
         if self.screen.update():
-            dirty=True
+            dirty = True
 
         if dirty:
-            if self.finder != None:
+            if self.finder is not None:
                 self.screen.draw(self.finder)
-        
+
     def run(self):
         self.running = True
         try:
             while self.running:
 
                 self.process_frame()
-                
+
+                if self.screen.quit_requested:
+                    return
+
                 key = self.kbd.get_key()
                 if key:
                     if key.lower() == "q":
                         return
                     elif key == " ":
                         self.save_image()
-                        
+
         except KeyboardInterrupt:
             pass
-        finally:   
-            print("System stopping:tidying up")
+        finally:
+            print("System stopping: tidying up")
             self.screen.close()
             self.kbd.close()
             self.picam2.stop()
 
+
 def main():
     magic_camera = MagicCamera()
     magic_camera.run()
+
 
 if __name__ == "__main__":
     main()

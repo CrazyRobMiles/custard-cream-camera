@@ -1,6 +1,6 @@
 {
     "display": {
-        "type": "ili9486",
+        "type": "hdmi-desktop",
         "ili9486": {
             "dc_pin": 24,
             "reset_pin": 25,
@@ -8,10 +8,13 @@
             "spi_device": 0,
             "spi_speed": 16000000
         },
-        "hdmi": {
+        "hdmi-pygame": {
             "fullscreen": true,
             "window_width": 800,
             "window_height": 480
+        },
+        "hdmi-desktop": {
+            "scale": 1
         }
     }
 }

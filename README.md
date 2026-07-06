@@ -358,12 +358,13 @@ python magic_camera.py
 
 ## Display backends
 
-`magic_camera.py` renders through a pluggable display layer in [displays/](displays/). Two backends are provided:
+`magic_camera.py` renders through a pluggable display layer in [displays/](displays/). Three backends are provided:
 
 * `ili9486` — the SPI ILI9486 LCD + XPT2046 touch panel ([displays/ili9486_display.py](displays/ili9486_display.py))
-* `hdmi` — a window on a native HDMI/desktop display, using the mouse for touch input ([displays/hdmi_display.py](displays/hdmi_display.py))
+* `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([displays/hdmi_desktop_display.py](displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app. This is the simplest option and the one to try first on a device with a native HDMI display.
+* `hdmi-pygame` — a dedicated fullscreen SDL/pygame surface, using the mouse for touch input ([displays/hdmi_pygame_display.py](displays/hdmi_pygame_display.py)). Bypasses the desktop's window manager for lower-overhead fullscreen updates, at the cost of needing a working SDL video driver for your setup — reach for this only if `hdmi-desktop`'s performance isn't enough.
 
-Select the backend and tune its pins/window size in [settings.json](settings.json):
+Select the backend and tune its options in [settings.json](settings.json):
 
 ```json
 {
@@ -373,7 +374,11 @@ Select the backend and tune its pins/window size in [settings.json](settings.jso
 }
 ```
 
-Set `"type"` to `"hdmi"` to run on a desktop with a native HDMI display instead.
+Set `"type"` to `"hdmi-desktop"` or `"hdmi-pygame"` to run on a device with a native HDMI display instead. `hdmi-desktop` needs Tkinter, which on Raspberry Pi OS / Debian is a system package, not a pip one:
+
+```bash
+sudo apt install python3-tk
+```
 
 ## Deactivating the Virtual Environment
 

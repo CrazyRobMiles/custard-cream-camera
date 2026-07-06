@@ -1,3 +1,5 @@
+import sys
+
 import pygame
 from PIL import ImageDraw
 
@@ -5,8 +7,13 @@ from .base import BaseDisplay
 from .widgets import ButtonPanel
 
 
-class HDMIDisplay(BaseDisplay):
-    """Displays frames in a window on a native HDMI / desktop output, using the mouse for touch input."""
+class HDMIPygameDisplay(BaseDisplay):
+    """Displays frames fullscreen via SDL/pygame, using the mouse for touch input.
+
+    Bypasses the desktop's own window manager for a dedicated, lower-overhead fullscreen
+    surface, at the cost of needing a working SDL video driver (X11/Wayland/KMSDRM) for
+    your particular setup - see HDMIDesktopDisplay for a plain-window alternative.
+    """
 
     WIDTH = 480
     HEIGHT = 320
@@ -24,6 +31,19 @@ class HDMIDisplay(BaseDisplay):
         size = (0, 0) if fullscreen else (window_width, window_height)
         self.surface = pygame.display.set_mode(size, flags)
         pygame.display.set_caption("Magic Camera")
+
+        driver = pygame.display.get_driver()
+        print(f"HDMIPygameDisplay: SDL video driver '{driver}', surface size {self.surface.get_size()}")
+        if driver == "dummy":
+            print(
+                "HDMIPygameDisplay: SDL fell back to the 'dummy' driver, so nothing will actually "
+                "appear on screen. This usually means DISPLAY/WAYLAND_DISPLAY wasn't visible "
+                "to this process - common if it was launched with `sudo` (which clears the "
+                "environment) or over SSH without a graphical session attached. Try running "
+                "without sudo from a terminal on the Pi's own desktop, or use `sudo -E` if "
+                "root is required.",
+                file=sys.stderr,
+            )
 
         self.buttons = ButtonPanel()
         self._update_scaling()

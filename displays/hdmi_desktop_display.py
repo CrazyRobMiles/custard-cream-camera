@@ -1,6 +1,7 @@
+import io
 import tkinter as tk
 
-from PIL import ImageDraw, ImageTk
+from PIL import ImageDraw
 
 from .base import BaseDisplay
 from .widgets import ButtonPanel
@@ -62,8 +63,14 @@ class HDMIDesktopDisplay(BaseDisplay):
         if self.scale != 1:
             img = img.resize((int(self.WIDTH * self.scale), int(self.HEIGHT * self.scale)))
 
+        # Hand Tkinter a raw PPM buffer instead of going through PIL's ImageTk: on Debian/
+        # Raspberry Pi OS that's a separate apt package (python3-pil.imagetk) from python3-tk,
+        # and this way there's nothing extra to install - just core Pillow + stdlib Tkinter.
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="PPM")
+
         # Keep a reference - Tkinter drops the image if it's garbage collected.
-        self.photo_image = ImageTk.PhotoImage(img)
+        self.photo_image = tk.PhotoImage(data=buf.getvalue(), format="ppm")
         self.label.configure(image=self.photo_image)
 
     def close(self):

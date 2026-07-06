@@ -18,7 +18,11 @@ class HDMIDisplay(BaseDisplay):
         pygame.mouse.set_visible(not fullscreen)
 
         flags = pygame.FULLSCREEN if fullscreen else 0
-        self.surface = pygame.display.set_mode((window_width, window_height), flags)
+        # Fullscreen requests an exclusive mode change to the given size; if the display
+        # doesn't support that exact mode, SDL can silently keep the desktop's current mode
+        # instead. (0, 0) tells it to use the desktop's current resolution instead.
+        size = (0, 0) if fullscreen else (window_width, window_height)
+        self.surface = pygame.display.set_mode(size, flags)
         pygame.display.set_caption("Magic Camera")
 
         self.buttons = ButtonPanel()

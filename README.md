@@ -397,6 +397,46 @@ To install it:
    chmod +x ~/Desktop/magic-camera.desktop
    ```
 
+## Voice-Prompted AI Edits
+
+Hold the **Speak** button, say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app captures a full-resolution still, transcribes what you said, and sends both to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg` and shown on screen for a few seconds. This is implemented in [nanobanana.py](nanobanana.py); the viewfinder and Stop button stay responsive while it's working since the network calls run on a background thread.
+
+Requirements:
+
+* A microphone, and `arecord` available (part of `alsa-utils`, normally already installed on Raspberry Pi OS — `sudo apt install alsa-utils` if not).
+* A Gemini API key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey), set as an environment variable **before launching the app** (not stored in `settings.json`, since that file is checked into git):
+  ```bash
+  export GOOGLE_API_KEY="your-api-key"
+  ```
+  If launching from a desktop icon, add the `export` line to `~/.bashrc` (or wherever your shell profile lives) so it's set before `run_magic_camera.sh` runs.
+
+Model names, recording length, and the result's on-screen hold time are all configurable under `"nanobanana"` in [settings.json](settings.json). The model IDs (`transcribe_model`, `edit_model`) may need adjusting as Google's model naming evolves — check the current names in the [Gemini API docs](https://ai.google.dev/gemini-api/docs/models) if editing fails with a "model not found" style error.
+
+## Printing
+
+The **Print** button sends whichever photo you most recently captured or AI-edited to your default CUPS printer (`lp <file>`) — see the [Canon SELPHY CP400 setup](#using-a-canon-selphy-cp400-with-raspberry-pi-and-cups) above for getting a printer configured as the default. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `magic_camera.py`.
+
+## Bluetooth Shutter Remote
+
+Cheap Bluetooth camera remotes don't have a real "pairing mode" — they just have two buttons/positions (labelled iOS/Android or similar) that each send a different key, since iOS and Android camera apps historically listened for different shortcuts. [shutter_remote.py](shutter_remote.py) listens for both directly at the input-device level (via `evdev`), independent of which window has focus:
+
+* **iOS** button → Volume Up (`KEY_VOLUMEUP`) → takes a photo, the same action as the **Click** button.
+* **Android** button → Enter (`KEY_ENTER`) → hold-to-talk, the same as the **Speak** button: pressing starts recording, releasing sends it. This relies on the remote sending a genuine press-then-release pair for a physical hold, which is normal HID keyboard behavior, but worth confirming for your specific unit (see below).
+
+To enable it:
+
+1. Set `"shutter_remote": {"enabled": true}` in [settings.json](settings.json).
+2. Make sure your user can read input devices: `sudo usermod -aG input $USER`, then log out and back in (or reboot) for group membership to take effect.
+
+The Volume Up mapping is easy to confirm: pressing the iOS button should show your desktop's volume OSD. The Enter mapping is a best guess for "Android mode" on these remotes — if it doesn't trigger recording, confirm the actual key with:
+```bash
+sudo apt install evtest
+sudo evtest   # pick your remote from the list, press the Android button, read the KEY_ name
+```
+then set `"photo_key"`/`"speak_key"` in `settings.json` to match (either can be set to `null` to disable that mapping without disabling the other).
+
+A side effect of not grabbing the device exclusively: the system will *also* see the Volume Up key and nudge the volume/show its OSD on every photo — harmless, but if it bothers you, set `"grab": true` to claim the device exclusively (note this means nothing else on the system can use it while the app is running, fine for a dedicated remote, not fine if it's secretly a general Bluetooth keyboard). If multiple input devices are around and something else is accidentally triggering captures, narrow it down with `"device_name"` (a case-insensitive substring match against the device name shown by `evtest`).
+
 ## Deactivating the Virtual Environment
 
 When you have finished working:

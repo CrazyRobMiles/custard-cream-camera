@@ -4,3 +4,5 @@ numpy
 spidev
 RPi.GPIO
 pygame
+google-genai
+evdev

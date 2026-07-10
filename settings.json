@@ -17,5 +17,22 @@
             "fullscreen": true,
             "scale": 1
         }
+    },
+    "nanobanana": {
+        "api_key_env": "GOOGLE_API_KEY",
+        "transcribe_model": "gemini-2.5-flash",
+        "edit_model": "gemini-2.5-flash-image",
+        "sample_rate": 16000,
+        "channels": 1,
+        "max_record_seconds": 15,
+        "result_hold_seconds": 4,
+        "device": null
+    },
+    "shutter_remote": {
+        "enabled": false,
+        "photo_key": "KEY_VOLUMEUP",
+        "speak_key": "KEY_ENTER",
+        "device_name": null,
+        "grab": false
     }
 }

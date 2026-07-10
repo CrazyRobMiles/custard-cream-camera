@@ -91,17 +91,22 @@ class Button:
         self.touch_down_pending = True
 
     def update(self):
+        # Clear each pending flag *before* invoking the handler, not after: handlers here
+        # (e.g. print_image, start/finish_voice_prompt) can call screen.update() themselves
+        # while they run (to stay responsive during a blocking action), which re-enters this
+        # method - if the flag were still set at that point, the handler would be invoked again
+        # from within itself, recursing until Python's stack limit is hit.
         dirty = False
 
         if self.touch_down_pending:
+            self.touch_down_pending = False
             dirty = True
             self.do_down()
-            self.touch_down_pending = False
 
         if self.touch_up_pending:
+            self.touch_up_pending = False
             dirty = True
             self.do_up()
-            self.touch_up_pending = False
 
         return dirty
 

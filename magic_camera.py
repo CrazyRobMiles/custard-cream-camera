@@ -10,6 +10,7 @@ import tty
 from pathlib import Path
 from threading import Event, Thread
 
+from libcamera import Transform
 from PIL import Image, ImageDraw, ImageFont
 from picamera2 import Picamera2
 
@@ -64,12 +65,22 @@ class MagicCamera():
 
         self.picam2 = Picamera2()
 
+        # Corrects for the sensor being mounted rotated 180 degrees in this build - flip both
+        # axes rather than rotating every captured frame in software afterward.
+        camera_settings = settings.get("camera", {})
+        camera_transform = Transform(
+            hflip=camera_settings.get("hflip", False),
+            vflip=camera_settings.get("vflip", False),
+        )
+
         self.preview_config = self.picam2.create_preview_configuration(
-            main={"size": (480, 320), "format": "BGR888"}
+            main={"size": (480, 320), "format": "BGR888"},
+            transform=camera_transform,
         )
 
         self.still_config = self.picam2.create_still_configuration(
-            main={"size": (4056, 3040), "format": "BGR888"}
+            main={"size": (4056, 3040), "format": "BGR888"},
+            transform=camera_transform,
         )
 
         self.picam2.configure(self.preview_config)

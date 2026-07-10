@@ -29,11 +29,11 @@
         "device": null
     },
     "shutter_remote": {
-        "enabled": false,
+        "enabled": true,
         "photo_key": "KEY_VOLUMEUP",
         "speak_key": "KEY_ENTER",
         "device_name": null,
-        "grab": false
+        "grab": true
     },
     "printing": {
         "printer": "SELPHY_CP400"

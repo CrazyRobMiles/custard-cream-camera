@@ -380,6 +380,23 @@ Set `"type"` to `"hdmi-desktop"` or `"hdmi-pygame"` to run on a device with a na
 sudo apt install python3-tk
 ```
 
+## Running from a Desktop Icon
+
+[run_magic_camera.sh](run_magic_camera.sh) and [magic-camera.desktop](magic-camera.desktop) let you launch the app by double-clicking an icon instead of typing commands in a terminal. The script finds its own location automatically, activates `venv` if one exists next to it, and (if `magic_camera.py` exits with an error) keeps the terminal window open so you can read what went wrong instead of it just vanishing.
+
+To install it:
+
+1. Edit `Exec=` in `magic-camera.desktop` if this repo isn't cloned at `/home/rob/nanobanana-camera`.
+2. Copy the `.desktop` file to your desktop and/or application menu:
+   ```bash
+   cp magic-camera.desktop ~/Desktop/
+   cp magic-camera.desktop ~/.local/share/applications/   # to also show it in the app menu
+   ```
+3. Most file managers treat a newly-placed `.desktop` file as untrusted the first time — right-click the icon and choose "Allow Launching" / "Trust" (wording varies by desktop environment), or mark it executable if it isn't already:
+   ```bash
+   chmod +x ~/Desktop/magic-camera.desktop
+   ```
+
 ## Deactivating the Virtual Environment
 
 When you have finished working:

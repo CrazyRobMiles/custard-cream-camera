@@ -97,6 +97,8 @@ class MagicCamera():
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
 
+        self.printer_name = settings.get("printing", {}).get("printer")
+
         self.finder = None
         self.img = None
         self.running = None
@@ -163,12 +165,21 @@ class MagicCamera():
 
         print(f"Printing {self.last_photo_path}")
         self.show_result(self.status_frame("Printing..."), hold_seconds=1)
+
+        cmd = ["lp"]
+        if self.printer_name:
+            cmd += ["-d", self.printer_name]
+        cmd.append(str(self.last_photo_path))
+
         try:
             # `lp` just queues the job with CUPS and returns immediately - it doesn't wait
             # for the physical print to finish - so this stays quick regardless of printer speed.
-            subprocess.run(["lp", str(self.last_photo_path)], check=True)
+            subprocess.run(cmd, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"Print failed: {e}")
+            if self.printer_name is None:
+                print("No 'printer' set in settings.json and no CUPS default configured - "
+                      "run `lpstat -p -d` to see available printers.")
             self.show_result(self.status_frame("Print failed"), hold_seconds=2)
 
     # ------------------------------------------------------------

@@ -414,7 +414,9 @@ Model names, recording length, and the result's on-screen hold time are all conf
 
 ## Printing
 
-The **Print** button sends whichever photo you most recently captured or AI-edited to your default CUPS printer (`lp <file>`) — see the [Canon SELPHY CP400 setup](#using-a-canon-selphy-cp400-with-raspberry-pi-and-cups) above for getting a printer configured as the default. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `magic_camera.py`.
+The **Print** button sends whichever photo you most recently captured or AI-edited to CUPS (`lp <file>`) — see the [Canon SELPHY CP400 setup](#using-a-canon-selphy-cp400-with-raspberry-pi-and-cups) above for getting a printer configured. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `magic_camera.py`.
+
+By default `lp` is called with no `-d` flag, meaning it uses CUPS's configured default destination — if you get `lp: Error - No default destination`, either set one with `sudo lpadmin -d <printer-name>` (see `lpstat -p -d` for the list of configured printers and current default), or set `"printer": "<printer-name>"` under `"printing"` in [settings.json](settings.json) to have the app always target that printer explicitly, independent of the system default.
 
 ## Bluetooth Shutter Remote
 

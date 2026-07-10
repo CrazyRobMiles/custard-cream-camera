@@ -34,5 +34,8 @@
         "speak_key": "KEY_ENTER",
         "device_name": null,
         "grab": false
+    },
+    "printing": {
+        "printer": "SELPHY_CP400"
     }
 }

@@ -397,9 +397,19 @@ To install it:
    chmod +x ~/Desktop/magic-camera.desktop
    ```
 
+## Image Browser
+
+Pressing **Speak** or **Print** opens an image browser rather than acting immediately, so you can choose *which* photo to edit or print instead of always using the last one taken:
+
+1. A 3×3 grid of the 9 most recent photos in `captures/` appears (newest first), with **Left**/**Right** to page through older ones and **Quit** to cancel and go back to the live viewfinder.
+2. Tapping a thumbnail shows it fullscreen with **Select**/**Ignore** buttons. **Ignore** goes back to the grid; **Select** proceeds with whichever action (Speak or Print) opened the browser, using that image.
+3. For **Print**, Select immediately prints it. For **Speak**, Select becomes a hold-to-talk button — press to record, release to send, exactly like the original Speak button, just targeting the chosen photo instead of a fresh capture.
+
+This only applies to the on-screen Speak/Print buttons. The [Bluetooth shutter remote](#bluetooth-shutter-remote)'s photo/speak keys deliberately bypass the browser and act immediately on a fresh capture, since requiring on-screen navigation would defeat the point of a physical, look-free trigger.
+
 ## Voice-Prompted AI Edits
 
-Hold the **Speak** button, say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app captures a full-resolution still, transcribes what you said, and sends both to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg` and shown on screen for a few seconds. This is implemented in [nanobanana.py](nanobanana.py); the viewfinder and Stop button stay responsive while it's working since the network calls run on a background thread.
+Choose a photo via the image browser (or use the shutter remote's speak key) and hold **Select** (or the remote button), say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app transcribes what you said and sends it with the chosen image to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg` and shown on screen for a few seconds. This is implemented in [nanobanana.py](nanobanana.py); the viewfinder and Stop button stay responsive while it's working since the network calls run on a background thread.
 
 Requirements:
 
@@ -414,7 +424,7 @@ Model names, recording length, and the result's on-screen hold time are all conf
 
 ## Printing
 
-The **Print** button sends whichever photo you most recently captured or AI-edited to CUPS (`lp <file>`) — see the [Canon SELPHY CP400 setup](#using-a-canon-selphy-cp400-with-raspberry-pi-and-cups) above for getting a printer configured. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `magic_camera.py`.
+The **Print** button (via the image browser) sends the chosen photo to CUPS (`lp <file>`) — see the [Canon SELPHY CP400 setup](#using-a-canon-selphy-cp400-with-raspberry-pi-and-cups) above for getting a printer configured. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `magic_camera.py`.
 
 By default `lp` is called with no `-d` flag, meaning it uses CUPS's configured default destination — if you get `lp: Error - No default destination`, either set one with `sudo lpadmin -d <printer-name>` (see `lpstat -p -d` for the list of configured printers and current default), or set `"printer": "<printer-name>"` under `"printing"` in [settings.json](settings.json) to have the app always target that printer explicitly, independent of the system default.
 

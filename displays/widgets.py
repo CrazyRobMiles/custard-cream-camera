@@ -7,7 +7,7 @@ class Button:
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32
     )
 
-    def __init__(self, x, y, width, height, text, font, text_colour, back_colour, up_handler, down_handler):
+    def __init__(self, x, y, width, height, text, font, text_colour, back_colour, up_handler, down_handler, visible=True):
         self.x = x
         self.y = y
         self.height = height
@@ -18,6 +18,7 @@ class Button:
         self.back_colour = back_colour
         self.up_handler = up_handler
         self.down_handler = down_handler
+        self.visible = visible
         self.pressed = False
         self.enabled = False
         self.touch_down_pending = False
@@ -25,7 +26,9 @@ class Button:
 
     def draw(self, draw):
 
-        if not self.enabled:
+        # visible=False buttons still hit-test/dispatch normally - used for tap targets (e.g.
+        # thumbnail cells) whose visuals are drawn separately, onto the base image, by the caller.
+        if not self.enabled or not self.visible:
             return
 
         text_colour = self.back_colour if self.pressed else self.text_colour

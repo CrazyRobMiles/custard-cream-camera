@@ -85,14 +85,15 @@ class MagicCamera():
 
         button_y = self.screen.HEIGHT - 50
 
-        main_menu = (
+        # Speak/Print open the image browser rather than acting immediately - see enter_browse().
+        self.main_menu = (
             Button(0, button_y, 110, 50, "Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
-            Button(123, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), self.finish_voice_prompt, self.start_voice_prompt),
-            Button(246, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.print_image),
+            Button(123, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), None, lambda: self.enter_browse("speak")),
+            Button(246, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, lambda: self.enter_browse("print")),
             Button(369, button_y, 110, 50, "Stop", self.medium_font, (255, 0, 255), (0, 0, 255), None, self.stop_running),
         )
 
-        self.screen.set_buttons(main_menu)
+        self.screen.set_buttons(self.main_menu)
 
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
@@ -104,6 +105,16 @@ class MagicCamera():
         self.running = None
         self.save_file_name = None
         self.last_photo_path = None
+
+        # Image browser ("Speak"/"Print" buttons): mode is one of "live", "browse_grid",
+        # "browse_preview". browse_view holds whatever the current grid/preview frame is, drawn
+        # in place of the live viewfinder while mode != "live".
+        self.mode = "live"
+        self.browse_pending_action = None
+        self.browse_images = []
+        self.browse_page = 0
+        self.browse_selected_path = None
+        self.browse_view = None
 
         # Voice-prompted AI edit ("Speak" button)
         nanobanana_settings = settings.get("nanobanana", {})
@@ -157,19 +168,20 @@ class MagicCamera():
         self.last_photo_path = self.save_file_name
         print(f"Saved {self.save_file_name}")
 
-    def print_image(self):
-        if self.last_photo_path is None:
+    def print_image(self, path=None):
+        path = path or self.last_photo_path
+        if path is None:
             print("Nothing to print yet")
             self.show_result(self.status_frame("Nothing to print yet"), hold_seconds=2)
             return
 
-        print(f"Printing {self.last_photo_path}")
+        print(f"Printing {path}")
         self.show_result(self.status_frame("Printing..."), hold_seconds=1)
 
         cmd = ["lp"]
         if self.printer_name:
             cmd += ["-d", self.printer_name]
-        cmd.append(str(self.last_photo_path))
+        cmd.append(str(path))
 
         try:
             # `lp` just queues the job with CUPS and returns immediately - it doesn't wait
@@ -181,6 +193,135 @@ class MagicCamera():
                 print("No 'printer' set in settings.json and no CUPS default configured - "
                       "run `lpstat -p -d` to see available printers.")
             self.show_result(self.status_frame("Print failed"), hold_seconds=2)
+
+    # ------------------------------------------------------------
+    # Image browser ("Speak"/"Print" open this to pick which photo to act on)
+    # ------------------------------------------------------------
+
+    def enter_browse(self, action):
+        if self.ai_pending:
+            return
+        self.browse_pending_action = action
+        self.browse_page = 0
+        self.browse_images = sorted(
+            (p for p in self.save_dir.glob("*.jpg") if p.name != "ai_source.jpg"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        self.show_browse_grid()
+
+    def exit_browse(self):
+        self.mode = "live"
+        self.browse_pending_action = None
+        self.browse_selected_path = None
+        self.browse_images = []
+        self.screen.set_buttons(self.main_menu)
+        if self.finder is not None:
+            self.screen.draw(self.finder)
+
+    def show_browse_grid(self):
+        self.mode = "browse_grid"
+        button_y = self.screen.HEIGHT - 50
+
+        if not self.browse_images:
+            self.screen.set_buttons((
+                Button(330, button_y, 150, 50, "Quit", self.medium_font, (255, 255, 255), (150, 0, 0), None, self.exit_browse),
+            ))
+            self.browse_view = self.status_frame("No photos yet")
+            self.screen.draw(self.browse_view)
+            return
+
+        self.screen.set_buttons(())
+        self.screen.draw(self.status_frame("Loading..."))
+
+        cols, rows = 3, 3
+        per_page = cols * rows
+        grid_height = button_y
+        cell_w = self.screen.WIDTH // cols
+        cell_h = grid_height // rows
+
+        page_start = self.browse_page * per_page
+        page_images = self.browse_images[page_start:page_start + per_page]
+
+        canvas = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (20, 20, 20))
+        thumb_buttons = []
+
+        for i, path in enumerate(page_images):
+            col, row = i % cols, i // cols
+            cell_x, cell_y = col * cell_w, row * cell_h
+
+            try:
+                thumb = Image.open(path)
+                thumb.draft("RGB", (cell_w, cell_h))  # fast DCT-scaled JPEG decode for thumbnailing
+                thumb = thumb.convert("RGB")
+                thumb.thumbnail((cell_w - 8, cell_h - 8))
+                canvas.paste(thumb, (cell_x + (cell_w - thumb.width) // 2, cell_y + (cell_h - thumb.height) // 2))
+            except Exception as e:
+                print(f"Could not load thumbnail {path}: {e}")
+
+            thumb_buttons.append(Button(
+                cell_x, cell_y, cell_w, cell_h, "", self.small_font, (0, 0, 0), (0, 0, 0),
+                up_handler=None, down_handler=(lambda p=path: self.show_browse_preview(p)), visible=False,
+            ))
+
+        self.browse_view = canvas
+
+        nav_buttons = (
+            Button(0, button_y, 150, 50, "Left", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.browse_prev_page),
+            Button(165, button_y, 150, 50, "Right", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.browse_next_page),
+            Button(330, button_y, 150, 50, "Quit", self.medium_font, (255, 255, 255), (150, 0, 0), None, self.exit_browse),
+        )
+        self.screen.set_buttons((*nav_buttons, *thumb_buttons))
+        self.screen.draw(self.browse_view)
+
+    def browse_prev_page(self):
+        if self.browse_page > 0:
+            self.browse_page -= 1
+            self.show_browse_grid()
+
+    def browse_next_page(self):
+        max_page = (len(self.browse_images) - 1) // 9
+        if self.browse_page < max_page:
+            self.browse_page += 1
+            self.show_browse_grid()
+
+    def show_browse_preview(self, path):
+        self.mode = "browse_preview"
+        self.browse_selected_path = path
+
+        try:
+            self.browse_view = Image.open(path).convert("RGB").resize((self.screen.WIDTH, self.screen.HEIGHT))
+        except Exception as e:
+            print(f"Could not load {path}: {e}")
+            self.show_browse_grid()
+            return
+
+        button_y = self.screen.HEIGHT - 50
+        if self.browse_pending_action == "speak":
+            # Hold-to-talk, same as the original Speak button, just targeting this chosen image.
+            select_btn = Button(
+                0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
+                up_handler=self.finish_selected_voice_prompt, down_handler=self.start_voice_prompt,
+            )
+        else:
+            select_btn = Button(
+                0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
+                up_handler=None, down_handler=self.select_browse_print,
+            )
+        ignore_btn = Button(
+            250, button_y, 230, 50, "Ignore", self.medium_font, (255, 255, 255), (90, 90, 90),
+            up_handler=None, down_handler=self.show_browse_grid,
+        )
+
+        self.screen.set_buttons((select_btn, ignore_btn))
+        self.screen.draw(self.browse_view)
+
+    def select_browse_print(self):
+        self.print_image(self.browse_selected_path)
+        self.exit_browse()
+
+    def finish_selected_voice_prompt(self):
+        self.finish_voice_prompt(image_path=self.browse_selected_path)
 
     # ------------------------------------------------------------
     # Voice-prompted AI edit ("Speak" button: hold to record, release to send)
@@ -219,10 +360,13 @@ class MagicCamera():
         except Exception as e:
             print(f"Could not start recording: {e}")
             self.show_result(self.status_frame("Mic error"), hold_seconds=2)
+            if self.browse_pending_action == "speak":
+                self.exit_browse()
             return
         self.screen.draw(self.status_frame("Recording... release to send"))
 
-    def finish_voice_prompt(self):
+    def finish_voice_prompt(self, image_path=None):
+        """image_path: use this existing photo (from the browser) instead of capturing a fresh one."""
         if self.ai_pending:
             self.audio_recorder.stop()
             return
@@ -230,10 +374,15 @@ class MagicCamera():
         audio_path = self.audio_recorder.stop()
         if audio_path is None:
             self.show_result(self.status_frame("No audio captured"), hold_seconds=2)
+            if self.browse_pending_action == "speak":
+                self.exit_browse()
             return
 
-        still_path = self.save_dir / "ai_source.jpg"
-        self.picam2.switch_mode_and_capture_file(self.still_config, str(still_path))
+        if image_path is None:
+            still_path = self.save_dir / "ai_source.jpg"
+            self.picam2.switch_mode_and_capture_file(self.still_config, str(still_path))
+        else:
+            still_path = image_path
 
         self.ai_pending = True
         self.ai_done.clear()
@@ -264,23 +413,30 @@ class MagicCamera():
         result = self.ai_result
         self.ai_result = None
         self.ai_done.clear()
+        came_from_browse = self.browse_pending_action == "speak"
 
-        if result is None:
-            return
+        try:
+            if result is None:
+                return
 
-        if result[0] == "status":
-            self.show_result(self.status_frame(result[1]), hold_seconds=2)
-            return
+            if result[0] == "status":
+                self.show_result(self.status_frame(result[1]), hold_seconds=2)
+                return
 
-        _, image_bytes, prompt_text = result
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        out_path = self.save_dir / f"ai_{ts}.jpg"
-        out_path.write_bytes(image_bytes)
-        self.last_photo_path = out_path
-        print(f"Saved {out_path} (prompt: {prompt_text!r})")
+            _, image_bytes, prompt_text = result
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            out_path = self.save_dir / f"ai_{ts}.jpg"
+            out_path.write_bytes(image_bytes)
+            self.last_photo_path = out_path
+            print(f"Saved {out_path} (prompt: {prompt_text!r})")
 
-        result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((480, 320))
-        self.show_result(result_img, hold_seconds=self.nanobanana_settings.get("result_hold_seconds", 4))
+            result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((480, 320))
+            self.show_result(result_img, hold_seconds=self.nanobanana_settings.get("result_hold_seconds", 4))
+        finally:
+            # Only if this edit was triggered via the image browser's "Select" - the remote's
+            # direct hold-to-talk never enters browse mode, so this is a no-op for that path.
+            if came_from_browse:
+                self.exit_browse()
 
     def request_next_frame(self):
         self.pending_job = self.picam2.capture_request(
@@ -300,7 +456,8 @@ class MagicCamera():
 
             self.finder = Image.fromarray(frame, "RGB")
 
-            dirty = True
+            if self.mode == "live":
+                dirty = True
 
             self.request_next_frame()
 
@@ -327,6 +484,8 @@ class MagicCamera():
         if dirty:
             if self.ai_pending:
                 self.screen.draw(self.status_frame("Processing..."))
+            elif self.mode in ("browse_grid", "browse_preview"):
+                self.screen.draw(self.browse_view)
             elif self.finder is not None:
                 self.screen.draw(self.finder)
 

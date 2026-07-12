@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 from picamera2 import Picamera2
 
 from displays import Button, create_display
-from nanobanana import AudioRecorder, NanobananaClient
+from custard_cream import AudioRecorder, CustardCreamClient
 from print_overlays import apply_datestamp, apply_watermark
 from publishers import create_publisher
 from shutter_remote import ShutterRemote
@@ -142,16 +142,16 @@ class MagicCamera():
         self.browse_view = None
 
         # Voice-prompted AI edit ("Speak" button)
-        nanobanana_settings = settings.get("nanobanana", {})
-        self.nanobanana_settings = nanobanana_settings
+        custard_cream_settings = settings.get("custard_cream", {})
+        self.custard_cream_settings = custard_cream_settings
         self.audio_recorder = AudioRecorder(
-            sample_rate=nanobanana_settings.get("sample_rate", 16000),
-            channels=nanobanana_settings.get("channels", 1),
-            max_seconds=nanobanana_settings.get("max_record_seconds", 15),
-            device=nanobanana_settings.get("device"),
+            sample_rate=custard_cream_settings.get("sample_rate", 16000),
+            channels=custard_cream_settings.get("channels", 1),
+            max_seconds=custard_cream_settings.get("max_record_seconds", 15),
+            device=custard_cream_settings.get("device"),
         )
         self.audio_path = Path(tempfile.gettempdir()) / "magic_camera_prompt.wav"
-        self.nanobanana_client = None
+        self.custard_cream_client = None
         self.ai_pending = False
         self.ai_done = Event()
         self.ai_result = None
@@ -436,14 +436,14 @@ class MagicCamera():
     # Voice-prompted AI edit ("Speak" button: hold to record, release to send)
     # ------------------------------------------------------------
 
-    def get_nanobanana_client(self):
-        if self.nanobanana_client is None:
-            self.nanobanana_client = NanobananaClient(
-                api_key_env=self.nanobanana_settings.get("api_key_env", "GOOGLE_API_KEY"),
-                transcribe_model=self.nanobanana_settings.get("transcribe_model", "gemini-2.5-flash"),
-                edit_model=self.nanobanana_settings.get("edit_model", "gemini-2.5-flash-image"),
+    def get_custard_cream_client(self):
+        if self.custard_cream_client is None:
+            self.custard_cream_client = CustardCreamClient(
+                api_key_env=self.custard_cream_settings.get("api_key_env", "GOOGLE_API_KEY"),
+                transcribe_model=self.custard_cream_settings.get("transcribe_model", "gemini-2.5-flash"),
+                edit_model=self.custard_cream_settings.get("edit_model", "gemini-2.5-flash-image"),
             )
-        return self.nanobanana_client
+        return self.custard_cream_client
 
     def status_frame(self, text):
         base = self.finder if self.finder is not None else Image.new("RGB", (480, 320), (0, 0, 0))
@@ -500,7 +500,7 @@ class MagicCamera():
     def run_ai_edit(self, audio_path, still_path):
         """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on the network."""
         try:
-            client = self.get_nanobanana_client()
+            client = self.get_custard_cream_client()
             prompt_text = client.transcribe(audio_path.read_bytes())
             if not prompt_text:
                 self.ai_result = ("status", "Didn't catch that")
@@ -540,7 +540,7 @@ class MagicCamera():
             print(f"Saved {out_path} (prompt: {prompt_text!r})")
 
             result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((480, 320))
-            self.show_result(result_img, hold_seconds=self.nanobanana_settings.get("result_hold_seconds", 4))
+            self.show_result(result_img, hold_seconds=self.custard_cream_settings.get("result_hold_seconds", 4))
         finally:
             # Only if this edit was triggered via the image browser's "Select" - the remote's
             # direct hold-to-talk never enters browse mode, so this is a no-op for that path.

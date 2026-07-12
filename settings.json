@@ -18,7 +18,7 @@
             "scale": 1
         }
     },
-    "nanobanana": {
+    "custard_cream": {
         "api_key_env": "GOOGLE_API_KEY",
         "transcribe_model": "gemini-2.5-flash",
         "edit_model": "gemini-2.5-flash-image",
@@ -67,7 +67,7 @@
         "flickr": {
             "api_key_env": "FLICKR_API_KEY",
             "api_secret_env": "FLICKR_API_SECRET",
-            "tags": "nanobananacamera",
+            "tags": "custardcreamcamera",
             "is_public": true,
             "token_cache_dir": null
         }

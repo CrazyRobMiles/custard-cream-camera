@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 
 
-class NanobananaClient:
+class CustardCreamClient:
     """Wraps the Google GenAI SDK for speech-to-text and Nano Banana image editing."""
 
     def __init__(self, api_key_env="GOOGLE_API_KEY", transcribe_model="gemini-2.5-flash",

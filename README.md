@@ -1,10 +1,10 @@
 
-# Nanobanana Camera
+# Custard Cream Camera
 
 A homage to the one made by [Nikbuild](https://github.com/nickbild/banamera)
 
 This repository provides a small Python app that captures video from the
-Raspberry Pi HQ Camera using `picamera2` and displays it on an LCD panel. You can then use AI prompts to edit the picture using Nanobanana. 
+Raspberry Pi HQ Camera using `picamera2` and displays it on an LCD panel. You can then use AI prompts to edit the picture. 
 
 # Setting Up the Python Virtual Environment on Raspberry Pi OS
 
@@ -405,7 +405,7 @@ Both HDMI backends need `DISPLAY` (and ideally `XDG_RUNTIME_DIR`) set to reach t
 
 To install it:
 
-1. Edit `Exec=` in `magic-camera.desktop` if this repo isn't cloned at `/home/rob/nanobanana-camera`.
+1. Edit `Exec=` in `magic-camera.desktop` if this repo isn't cloned at `/home/rob/custard-cream-camera`.
 2. Copy the `.desktop` file to your desktop and/or application menu:
    ```bash
    cp magic-camera.desktop ~/Desktop/
@@ -430,7 +430,7 @@ There's no on-screen quit button — press keyboard `q` in the terminal, or (on 
 
 ## Voice-Prompted AI Edits
 
-Choose a photo via the image browser (or use the shutter remote's speak key) and hold **Select** (or the remote button), say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app transcribes what you said and sends it with the chosen image to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg` and shown on screen for a few seconds. This is implemented in [nanobanana.py](nanobanana.py); the viewfinder and Stop button stay responsive while it's working since the network calls run on a background thread.
+Choose a photo via the image browser (or use the shutter remote's speak key) and hold **Select** (or the remote button), say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app transcribes what you said and sends it with the chosen image to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg` and shown on screen for a few seconds. This is implemented in [custard_cream.py](custard_cream.py); the viewfinder and other buttons stay responsive while it's working since the network calls run on a background thread.
 
 Requirements:
 
@@ -441,7 +441,7 @@ Requirements:
   ```
   If launching from a desktop icon, add the `export` line to `~/.bashrc` (or wherever your shell profile lives) so it's set before `run_magic_camera.sh` runs.
 
-Model names, recording length, and the result's on-screen hold time are all configurable under `"nanobanana"` in [settings.json](settings.json). The model IDs (`transcribe_model`, `edit_model`) may need adjusting as Google's model naming evolves — check the current names in the [Gemini API docs](https://ai.google.dev/gemini-api/docs/models) if editing fails with a "model not found" style error.
+Model names, recording length, and the result's on-screen hold time are all configurable under `"custard_cream"` in [settings.json](settings.json). The model IDs (`transcribe_model`, `edit_model`) may need adjusting as Google's model naming evolves — check the current names in the [Gemini API docs](https://ai.google.dev/gemini-api/docs/models) if editing fails with a "model not found" style error.
 
 ## Printing
 
@@ -560,14 +560,14 @@ If launching from a desktop icon, add the two `export` lines to `~/.bashrc` so t
     "flickr": {
         "api_key_env": "FLICKR_API_KEY",
         "api_secret_env": "FLICKR_API_SECRET",
-        "tags": "nanobananacamera",
+        "tags": "custardcreamcamera",
         "is_public": true,
         "token_cache_dir": null
     }
 }
 ```
 
-* `"tags"` — space-separated tags applied to every upload; multi-word tags need their own quotes inside the string, e.g. `"tags": "nanobananacamera \"family holiday\""`.
+* `"tags"` — space-separated tags applied to every upload; multi-word tags need their own quotes inside the string, e.g. `"tags": "custardcreamcamera \"family holiday\""`.
 * `"is_public"` — `true` posts immediately visible to anyone on Flickr; set `false` for private (only you) instead.
 * `"token_cache_dir"` — leave `null` to use `flickrapi`'s own default cache location; only set this if you need the token stored somewhere specific.
 

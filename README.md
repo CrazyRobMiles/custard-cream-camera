@@ -418,13 +418,15 @@ To install it:
 
 ## Image Browser
 
-Pressing **Speak** or **Print** opens an image browser rather than acting immediately, so you can choose *which* photo to edit or print instead of always using the last one taken:
+Pressing **Speak**, **Print**, or **Publish** opens an image browser rather than acting immediately, so you can choose *which* photo to edit, print, or publish instead of always using the last one taken:
 
 1. A 3×3 grid of the 9 most recent photos in `captures/` appears (newest first), with **Left**/**Right** to page through older ones and **Quit** to cancel and go back to the live viewfinder.
-2. Tapping a thumbnail shows it fullscreen with **Select**/**Ignore** buttons. **Ignore** goes back to the grid; **Select** proceeds with whichever action (Speak or Print) opened the browser, using that image.
-3. For **Print**, Select immediately prints it. For **Speak**, Select becomes a hold-to-talk button — press to record, release to send, exactly like the original Speak button, just targeting the chosen photo instead of a fresh capture.
+2. Tapping a thumbnail shows it fullscreen with **Select**/**Ignore** buttons. **Ignore** goes back to the grid; **Select** proceeds with whichever action (Speak, Print, or Publish) opened the browser, using that image.
+3. For **Print** and **Publish**, Select immediately acts on the chosen image. For **Speak**, Select becomes a hold-to-talk button — press to record, release to send, exactly like the original Speak button, just targeting the chosen photo instead of a fresh capture.
 
-This only applies to the on-screen Speak/Print buttons. The [Bluetooth shutter remote](#bluetooth-shutter-remote)'s photo/speak keys deliberately bypass the browser and act immediately on a fresh capture, since requiring on-screen navigation would defeat the point of a physical, look-free trigger.
+This only applies to the on-screen Speak/Print/Publish buttons. The [Bluetooth shutter remote](#bluetooth-shutter-remote)'s photo/speak keys deliberately bypass the browser and act immediately on a fresh capture, since requiring on-screen navigation would defeat the point of a physical, look-free trigger.
+
+There's no on-screen quit button — press keyboard `q` in the terminal, or (on the HDMI backends) Escape / close the window.
 
 ## Voice-Prompted AI Edits
 
@@ -525,6 +527,51 @@ sudo evtest   # pick your remote from the list, press a button, read the KEY_ na
 ```
 
 **Not being detected?** `shutter_remote.py` retries device discovery every few seconds (Bluetooth remotes routinely disconnect between presses to save battery, and may not even be connected yet when the app starts), so it should pick the remote up on its own within a few seconds of it reconnecting. If it still doesn't, try power-cycling the remote — a stale/half-open Bluetooth connection from a previous session is a common cause and a fresh reconnect usually clears it.
+
+## Publishing to Flickr
+
+The **Publish** button (via the [image browser](#image-browser)) uploads the chosen photo to Flickr, tagged with whatever's configured in `settings.json`. This is built as a pluggable layer in [publishers/](publishers/) — the same shape as [displays/](displays/) — so other services (Instagram, a self-hosted gallery, whatever) could be added later as siblings to `flickr_publisher.py` without touching `magic_camera.py` beyond a new `"type"` branch in `publishers/__init__.py`.
+
+### One-time setup
+
+Flickr uses OAuth 1.0a, which needs a real browser to authorize the app — but only **once**. This is deliberately kept separate from the main camera app:
+
+1. Get an API key and secret from [flickr.com/services/apps/create](https://www.flickr.com/services/apps/create/) (needs your Pro account login).
+2. Set them as environment variables (same reasoning as the Gemini API key — never stored in `settings.json`, which is checked into git):
+   ```bash
+   export FLICKR_API_KEY="your-api-key"
+   export FLICKR_API_SECRET="your-api-secret"
+   ```
+3. Run the one-time setup script:
+   ```bash
+   python setup_flickr_auth.py
+   ```
+   It prints a URL — open it in a browser on *any* device (your phone is fine, it doesn't have to be the Pi), log into Flickr, authorize the app, and paste the verification code it gives you back into the terminal. This caches an access token locally (via `flickrapi`'s own cache, typically `~/.flickr/`).
+
+After that, **Publish** works with no further browser interaction — `magic_camera.py` only ever does the upload itself, using the cached token. If it's ever missing or expired, publishing fails with a clear message pointing back at this script rather than trying to prompt interactively (there's no browser available from a background upload thread).
+
+If launching from a desktop icon, add the two `export` lines to `~/.bashrc` so they're set before `run_magic_camera.sh` runs — same as the Gemini API key.
+
+### Configuration
+
+```json
+"publish": {
+    "type": "flickr",
+    "flickr": {
+        "api_key_env": "FLICKR_API_KEY",
+        "api_secret_env": "FLICKR_API_SECRET",
+        "tags": "nanobananacamera",
+        "is_public": true,
+        "token_cache_dir": null
+    }
+}
+```
+
+* `"tags"` — space-separated tags applied to every upload; multi-word tags need their own quotes inside the string, e.g. `"tags": "nanobananacamera \"family holiday\""`.
+* `"is_public"` — `true` posts immediately visible to anyone on Flickr; set `false` for private (only you) instead.
+* `"token_cache_dir"` — leave `null` to use `flickrapi`'s own default cache location; only set this if you need the token stored somewhere specific.
+
+Publishing runs on a background thread, the same way the AI edit does, so the viewfinder and other buttons stay responsive during the upload.
 
 ## Deactivating the Virtual Environment
 

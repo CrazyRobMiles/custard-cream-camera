@@ -18,6 +18,7 @@ from picamera2 import Picamera2
 from displays import Button, create_display
 from nanobanana import AudioRecorder, NanobananaClient
 from print_overlays import apply_datestamp, apply_watermark
+from publishers import create_publisher
 from shutter_remote import ShutterRemote
 
 SETTINGS_PATH = Path(__file__).parent / "settings.json"
@@ -51,6 +52,7 @@ class MagicCamera():
 
     def __init__(self):
         settings = load_settings()
+        self.settings = settings
 
         # Load three font sizes
         self.small_font = ImageFont.truetype(
@@ -98,12 +100,14 @@ class MagicCamera():
 
         button_y = self.screen.HEIGHT - 50
 
-        # Speak/Print open the image browser rather than acting immediately - see enter_browse().
+        # Speak/Print/Publish all open the image browser rather than acting immediately - see
+        # enter_browse(). There's no on-screen quit button any more - use keyboard 'q', or
+        # Escape/window-close on the HDMI backends.
         self.main_menu = (
             Button(0, button_y, 110, 50, "Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
             Button(123, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), None, lambda: self.enter_browse("speak")),
             Button(246, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, lambda: self.enter_browse("print")),
-            Button(369, button_y, 110, 50, "Stop", self.medium_font, (255, 0, 255), (0, 0, 255), None, self.stop_running),
+            Button(369, button_y, 110, 50, "Publish", self.medium_font, (255, 255, 255), (150, 90, 0), None, lambda: self.enter_browse("publish")),
         )
 
         self.screen.set_buttons(self.main_menu)
@@ -152,6 +156,15 @@ class MagicCamera():
         self.ai_done = Event()
         self.ai_result = None
 
+        # Publishing ("Publish" button) - pluggable, see publishers/. Lazily created since it
+        # needs API credentials that may not be configured if the feature isn't used, and runs
+        # on a background thread the same way the AI edit does, for the same reason (network I/O
+        # shouldn't block the viewfinder/buttons).
+        self.publisher = None
+        self.publish_pending = False
+        self.publish_done = Event()
+        self.publish_result = None
+
         # Bluetooth shutter remote - the physical button sends a real press+release, so the
         # "speak" key drives hold-to-talk the same way the on-screen Speak button does. All the
         # Events below are set from the remote's background listener thread and only ever acted
@@ -177,10 +190,6 @@ class MagicCamera():
                 grab=remote_settings.get("grab", False),
             )
             self.shutter_remote.start()
-
-    def stop_running(self):
-        print("Doing Stop action")
-        self.running = False
 
     def save_image(self):
         ts = time.strftime("%Y%m%d_%H%M%S")
@@ -260,7 +269,7 @@ class MagicCamera():
     # ------------------------------------------------------------
 
     def enter_browse(self, action):
-        if self.ai_pending:
+        if self.ai_pending or self.publish_pending:
             return
         self.browse_pending_action = action
         self.browse_page = 0
@@ -364,6 +373,11 @@ class MagicCamera():
                 0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
                 up_handler=self.finish_selected_voice_prompt, down_handler=self.start_voice_prompt,
             )
+        elif self.browse_pending_action == "publish":
+            select_btn = Button(
+                0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
+                up_handler=None, down_handler=self.select_browse_publish,
+            )
         else:
             select_btn = Button(
                 0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
@@ -383,6 +397,40 @@ class MagicCamera():
 
     def finish_selected_voice_prompt(self):
         self.finish_voice_prompt(image_path=self.browse_selected_path)
+
+    # ------------------------------------------------------------
+    # Publishing ("Publish" button, via the image browser)
+    # ------------------------------------------------------------
+
+    def get_publisher(self):
+        if self.publisher is None:
+            self.publisher = create_publisher(self.settings)
+        return self.publisher
+
+    def select_browse_publish(self):
+        self.publish_pending = True
+        self.publish_done.clear()
+        Thread(target=self.run_publish, args=(self.browse_selected_path,), daemon=True).start()
+
+    def run_publish(self, image_path):
+        """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on the network."""
+        try:
+            publisher = self.get_publisher()
+            ok = publisher.publish(image_path)
+            self.publish_result = "Published!" if ok else "Publish failed"
+        except Exception as e:
+            print(f"Publish failed: {e}")
+            self.publish_result = "Publish failed"
+        finally:
+            self.publish_done.set()
+
+    def finish_publish(self):
+        self.publish_pending = False
+        message = self.publish_result
+        self.publish_result = None
+        self.publish_done.clear()
+        self.show_result(self.status_frame(message), hold_seconds=2)
+        self.exit_browse()
 
     # ------------------------------------------------------------
     # Voice-prompted AI edit ("Speak" button: hold to record, release to send)
@@ -406,7 +454,7 @@ class MagicCamera():
         return frame
 
     def show_result(self, img, hold_seconds):
-        """Draws img and holds it on screen for a while, staying responsive to Stop/window-close."""
+        """Draws img and holds it on screen for a while, staying responsive to window-close."""
         self.screen.draw(img)
         end_time = time.time() + hold_seconds
         while self.running and not self.screen.quit_requested and time.time() < end_time:
@@ -542,9 +590,15 @@ class MagicCamera():
             self.finish_ai_edit()
             dirty = True
 
+        if self.publish_pending and self.publish_done.is_set():
+            self.finish_publish()
+            dirty = True
+
         if dirty:
             if self.ai_pending:
                 self.screen.draw(self.status_frame("Processing..."))
+            elif self.publish_pending:
+                self.screen.draw(self.status_frame("Publishing..."))
             elif self.mode in ("browse_grid", "browse_preview"):
                 self.screen.draw(self.browse_view)
             elif self.finder is not None:

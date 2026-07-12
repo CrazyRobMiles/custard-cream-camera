@@ -61,5 +61,15 @@
         "margin_fraction": 0.02,
         "text_colour": [255, 255, 255, 255],
         "background_colour": [0, 0, 0, 140]
+    },
+    "publish": {
+        "type": "flickr",
+        "flickr": {
+            "api_key_env": "FLICKR_API_KEY",
+            "api_secret_env": "FLICKR_API_SECRET",
+            "tags": "nanobananacamera",
+            "is_public": true,
+            "token_cache_dir": null
+        }
     }
 }

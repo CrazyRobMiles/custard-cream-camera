@@ -6,3 +6,4 @@ RPi.GPIO
 pygame
 google-genai
 evdev
+flickrapi

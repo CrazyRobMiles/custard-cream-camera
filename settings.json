@@ -36,10 +36,30 @@
         "grab": true
     },
     "printing": {
-        "printer": "SELPHY_CP400"
+        "printer": "SELPHY_CP400",
+        "test_mode": true,
+        "test_folder": "print_tests"
     },
     "camera": {
         "hflip": true,
         "vflip": true
+    },
+    "watermark": {
+        "enabled": true,
+        "file": "assets/images/watermark.png",
+        "horizontal_align": "right",
+        "vertical_align": "bottom",
+        "width_fraction": 0.2,
+        "margin_fraction": 0.02
+    },
+    "datestamp": {
+        "enabled": true,
+        "format": "%Y-%m-%d %H:%M",
+        "horizontal_align": "left",
+        "vertical_align": "bottom",
+        "font_fraction": 0.035,
+        "margin_fraction": 0.02,
+        "text_colour": [255, 255, 255, 255],
+        "background_colour": [0, 0, 0, 140]
     }
 }

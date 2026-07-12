@@ -1,6 +1,7 @@
 import io
 import json
 import select
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,7 @@ from picamera2 import Picamera2
 
 from displays import Button, create_display
 from nanobanana import AudioRecorder, NanobananaClient
+from print_overlays import apply_datestamp, apply_watermark
 from shutter_remote import ShutterRemote
 
 SETTINGS_PATH = Path(__file__).parent / "settings.json"
@@ -109,7 +111,15 @@ class MagicCamera():
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
 
-        self.printer_name = settings.get("printing", {}).get("printer")
+        printing_settings = settings.get("printing", {})
+        self.printer_name = printing_settings.get("printer")
+        self.print_test_mode = printing_settings.get("test_mode", False)
+        self.print_test_dir = Path(printing_settings.get("test_folder", "print_tests"))
+        if self.print_test_mode:
+            self.print_test_dir.mkdir(exist_ok=True)
+
+        self.watermark_settings = settings.get("watermark", {})
+        self.datestamp_settings = settings.get("datestamp", {})
 
         self.finder = None
         self.img = None
@@ -179,6 +189,34 @@ class MagicCamera():
         self.last_photo_path = self.save_file_name
         print(f"Saved {self.save_file_name}")
 
+    def prepare_print_copy(self, path):
+        """Returns a path to print: either `path` unchanged, or a temporary copy with the
+        configured watermark/date stamp composited on top. Never modifies the original file.
+        """
+        watermark_on = self.watermark_settings.get("enabled", False)
+        datestamp_on = self.datestamp_settings.get("enabled", False)
+        if not (watermark_on or datestamp_on):
+            return path
+
+        img = Image.open(path).convert("RGB")
+
+        if watermark_on:
+            watermark_path = Path(__file__).parent / self.watermark_settings.get("file", "assets/images/watermark.png")
+            try:
+                img = apply_watermark(img, watermark_path, self.watermark_settings)
+            except Exception as e:
+                print(f"Could not apply watermark: {e}")
+
+        if datestamp_on:
+            try:
+                img = apply_datestamp(img, self.datestamp_settings, Path(path).stat().st_mtime)
+            except Exception as e:
+                print(f"Could not apply date stamp: {e}")
+
+        out_path = Path(tempfile.gettempdir()) / "magic_camera_print.jpg"
+        img.save(out_path, "JPEG", quality=95)
+        return out_path
+
     def print_image(self, path=None):
         path = path or self.last_photo_path
         if path is None:
@@ -186,13 +224,25 @@ class MagicCamera():
             self.show_result(self.status_frame("Nothing to print yet"), hold_seconds=2)
             return
 
-        print(f"Printing {path}")
+        print_path = self.prepare_print_copy(path)
+
+        if self.print_test_mode:
+            # Exercises the full pipeline (watermark/date stamp included) without spending
+            # paper/ink - saves what would have been sent to `lp` instead of actually sending it.
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            test_path = self.print_test_dir / f"print_test_{ts}.jpg"
+            shutil.copyfile(print_path, test_path)
+            print(f"Print testing: saved {test_path} instead of printing")
+            self.show_result(self.status_frame("Test print saved"), hold_seconds=2)
+            return
+
+        print(f"Printing {path}" + (f" (with overlays: {print_path})" if print_path != path else ""))
         self.show_result(self.status_frame("Printing..."), hold_seconds=1)
 
         cmd = ["lp"]
         if self.printer_name:
             cmd += ["-d", self.printer_name]
-        cmd.append(str(path))
+        cmd.append(str(print_path))
 
         try:
             # `lp` just queues the job with CUPS and returns immediately - it doesn't wait

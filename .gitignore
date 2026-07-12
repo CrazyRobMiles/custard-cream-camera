@@ -3,3 +3,4 @@ venv/
 .env/
 captures/
 print_tests/
+magic_camera.log

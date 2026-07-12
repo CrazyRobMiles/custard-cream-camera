@@ -369,6 +369,23 @@ If the live viewfinder (or captured photos) comes out flipped or upside down - t
 
 Both `true` (the default in this repo's `settings.json`) corrects a sensor mounted rotated 180 degrees; use just one of the two if your image is mirrored on a single axis instead. This is applied once, in the camera's own capture pipeline via `libcamera`'s `Transform`, so it covers the viewfinder, saved photos, and whatever gets sent off for AI editing - not something each part of the app has to individually work around.
 
+## Exposure Compensation
+
+The camera always runs with auto-exposure enabled - there's no manual shutter speed/gain control - but small "EV-"/"EV+" buttons in the top corners of the live viewfinder let you bias the auto-exposure algorithm by a number of EV stops, which is enough to rescue a backlit subject (positive EV) or an overexposed bright scene (negative EV) without giving up auto-exposure entirely. The current offset is shown at the top of the viewfinder whenever it's non-zero, and resets to the default each time the app starts (it isn't saved back to `settings.json`).
+
+Range and step are configurable under `"exposure"` in [settings.json](settings.json):
+
+```json
+"exposure": {
+    "default": 0.0,
+    "step": 0.5,
+    "min": -2.0,
+    "max": 2.0
+}
+```
+
+This is separate from the manual aperture ring on the lens itself - that's a physical adjustment outside the app's control, and exposure compensation on top of it works the same way it would on any camera with an auto-exposure mode.
+
 ## Display backends
 
 `magic_camera.py` renders through a pluggable display layer in [displays/](displays/). Three backends are provided:
@@ -401,7 +418,7 @@ Both HDMI backends need `DISPLAY` (and ideally `XDG_RUNTIME_DIR`) set to reach t
 
 ## Running from a Desktop Icon
 
-[run_magic_camera.sh](run_magic_camera.sh) and [magic-camera.desktop](magic-camera.desktop) let you launch the app by double-clicking an icon instead of typing commands in a terminal. The script finds its own location automatically, activates `venv` if one exists next to it, and (if `magic_camera.py` exits with an error) keeps the terminal window open so you can read what went wrong instead of it just vanishing.
+[run_magic_camera.sh](run_magic_camera.sh) and [magic-camera.desktop](magic-camera.desktop) let you launch the app by double-clicking an icon instead of typing commands in a terminal. The script finds its own location automatically and activates `venv` if one exists next to it. `magic-camera.desktop` ships with `Terminal=false`, so no terminal window appears — if `magic_camera.py` exits with an error, the output goes to `magic_camera.log` next to the script instead of a window you'd need a keyboard to dismiss. Set `Terminal=true` if you'd rather see a terminal window on launch (it will then keep it open on error so you can read what went wrong, instead of logging to a file).
 
 To install it:
 

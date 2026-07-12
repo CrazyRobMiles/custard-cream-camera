@@ -44,6 +44,12 @@
         "hflip": true,
         "vflip": true
     },
+    "exposure": {
+        "default": 0.0,
+        "step": 0.5,
+        "min": -2.0,
+        "max": 2.0
+    },
     "watermark": {
         "enabled": true,
         "file": "assets/images/watermark.png",

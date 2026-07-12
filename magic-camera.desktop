@@ -4,5 +4,5 @@ Name=Magic Camera
 Comment=Camera viewfinder with AI photo editing
 Exec=/home/rob/custard-cream-camera/run_magic_camera.sh
 Icon=camera-photo
-Terminal=true
+Terminal=false
 Categories=Utility;Photography;

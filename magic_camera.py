@@ -90,6 +90,16 @@ class MagicCamera():
         self.picam2.configure(self.preview_config)
         self.picam2.start()
 
+        # Exposure compensation: biases the auto-exposure algorithm (still enabled) by a number
+        # of EV stops, rather than replacing it with a fixed manual exposure - useful for
+        # backlit subjects etc. via the on-screen +/- buttons, without giving up auto-exposure.
+        exposure_settings = settings.get("exposure", {})
+        self.ev_step = exposure_settings.get("step", 0.5)
+        self.ev_min = exposure_settings.get("min", -2.0)
+        self.ev_max = exposure_settings.get("max", 2.0)
+        self.exposure_value = exposure_settings.get("default", 0.0)
+        self.picam2.set_controls({"ExposureValue": self.exposure_value})
+
         self.frame_ready = Event()
 
         self.request_next_frame()
@@ -108,6 +118,9 @@ class MagicCamera():
             Button(123, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), None, lambda: self.enter_browse("speak")),
             Button(246, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, lambda: self.enter_browse("print")),
             Button(369, button_y, 110, 50, "Publish", self.medium_font, (255, 255, 255), (150, 90, 0), None, lambda: self.enter_browse("publish")),
+            # Exposure compensation - tucked into the top corners since the bottom row is full.
+            Button(0, 0, 50, 40, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
+            Button(430, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
         )
 
         self.screen.set_buttons(self.main_menu)
@@ -190,6 +203,10 @@ class MagicCamera():
                 grab=remote_settings.get("grab", False),
             )
             self.shutter_remote.start()
+
+    def adjust_exposure(self, delta):
+        self.exposure_value = round(min(self.ev_max, max(self.ev_min, self.exposure_value + delta)), 2)
+        self.picam2.set_controls({"ExposureValue": self.exposure_value})
 
     def save_image(self):
         ts = time.strftime("%Y%m%d_%H%M%S")
@@ -445,6 +462,16 @@ class MagicCamera():
             )
         return self.custard_cream_client
 
+    def live_frame(self):
+        """The current viewfinder frame, with the EV readout overlaid if compensation is active."""
+        if self.exposure_value == 0:
+            return self.finder
+
+        frame = self.finder.copy()
+        draw = ImageDraw.Draw(frame)
+        draw.text((frame.width // 2, 20), f"EV {self.exposure_value:+.1f}", font=self.small_font, fill=(255, 255, 0), anchor="mm")
+        return frame
+
     def status_frame(self, text):
         base = self.finder if self.finder is not None else Image.new("RGB", (480, 320), (0, 0, 0))
         frame = base.copy()
@@ -602,7 +629,7 @@ class MagicCamera():
             elif self.mode in ("browse_grid", "browse_preview"):
                 self.screen.draw(self.browse_view)
             elif self.finder is not None:
-                self.screen.draw(self.finder)
+                self.screen.draw(self.live_frame())
 
     def run(self):
         self.running = True

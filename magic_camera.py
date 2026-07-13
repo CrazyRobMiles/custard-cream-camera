@@ -216,6 +216,11 @@ class MagicCamera():
         self.last_photo_path = self.save_file_name
         print(f"Saved {self.save_file_name}")
 
+        # Flash the screen white, briefly - the shutter remote/keyboard triggers have no other
+        # feedback, so this makes it obvious a photo was actually taken.
+        white_frame = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (255, 255, 255))
+        self.show_result(white_frame, hold_seconds=0.5)
+
     def prepare_print_copy(self, path):
         """Returns a path to print: either `path` unchanged, or a temporary copy with the
         configured watermark/date stamp composited on top. Never modifies the original file.

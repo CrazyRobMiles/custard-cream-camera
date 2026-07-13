@@ -24,6 +24,7 @@ class CustardCreamClient:
         self.edit_model = edit_model
 
     def transcribe(self, audio_bytes, mime_type="audio/wav"):
+        print(f"Speak: sending {len(audio_bytes)} bytes to '{self.transcribe_model}' for transcription")
         response = self.client.models.generate_content(
             model=self.transcribe_model,
             contents=[
@@ -33,9 +34,14 @@ class CustardCreamClient:
             ],
         )
         text = (response.text or "").strip()
+        if text:
+            print(f"Speak: transcription result: {text!r}")
+        else:
+            print("Speak: transcription returned no text")
         return text or None
 
     def edit_image(self, image_bytes, prompt_text, mime_type="image/jpeg"):
+        print(f"Speak: sending {len(image_bytes)} bytes to '{self.edit_model}' for editing (prompt: {prompt_text!r})")
         response = self.client.models.generate_content(
             model=self.edit_model,
             contents=[
@@ -46,9 +52,21 @@ class CustardCreamClient:
         # Response shape (candidates[0].content.parts, each either text or inline_data) matches
         # the documented Gemini image-generation output as of the google-genai SDK this was
         # written against - worth double-checking against current docs if this stops matching.
+        text_parts = []
         for part in response.candidates[0].content.parts:
             if part.inline_data is not None:
+                print(f"Speak: edit response contained image data ({len(part.inline_data.data)} bytes)")
                 return part.inline_data.data
+            if part.text:
+                text_parts.append(part.text)
+
+        if text_parts:
+            # The model sometimes explains itself in text instead of returning an image (e.g. a
+            # safety refusal, or asking for a clearer prompt) - surfacing it here is the only way
+            # to see why, since the caller just gets back None either way.
+            print(f"Speak: edit response contained no image, only text: {' '.join(text_parts)!r}")
+        else:
+            print("Speak: edit response contained no image and no text")
         return None
 
 

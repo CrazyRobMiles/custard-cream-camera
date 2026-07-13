@@ -608,6 +608,7 @@ class MagicCamera():
             if self.mode == "play":
                 self.show_play_image()
             return
+        print("Speak: recording started")
         self.screen.draw(self.status_frame("Recording... release to send"))
 
     def finish_voice_prompt(self, image_path=None):
@@ -618,16 +619,20 @@ class MagicCamera():
 
         audio_path = self.audio_recorder.stop()
         if audio_path is None:
+            print("Speak: no audio captured")
             self.show_result(self.status_frame("No audio captured"), hold_seconds=2)
             if self.mode == "play":
                 self.show_play_image()
             return
+        print(f"Speak: recording stopped ({audio_path.stat().st_size} bytes)")
 
         if image_path is None:
             still_path = self.save_dir / "ai_source.jpg"
             self.picam2.switch_mode_and_capture_file(self.still_config, str(still_path))
+            print(f"Speak: captured fresh photo {still_path}")
         else:
             still_path = image_path
+            print(f"Speak: using existing photo {still_path}")
 
         self.ai_pending = True
         self.ai_done.clear()
@@ -641,14 +646,13 @@ class MagicCamera():
             if not prompt_text:
                 self.ai_result = ("status", "Didn't catch that")
             else:
-                print(f"Voice prompt: {prompt_text}")
                 edited_bytes = client.edit_image(still_path.read_bytes(), prompt_text)
                 if edited_bytes is None:
                     self.ai_result = ("status", "No image returned")
                 else:
                     self.ai_result = ("image", edited_bytes, prompt_text)
         except Exception as e:
-            print(f"AI edit failed: {e}")
+            print(f"Speak: AI edit failed: {e}")
             self.ai_result = ("status", "AI edit failed")
         finally:
             self.ai_done.set()

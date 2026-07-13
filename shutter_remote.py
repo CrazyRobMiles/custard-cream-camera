@@ -7,7 +7,7 @@ try:
 except ImportError:
     evdev = None
 
-RETRY_SECONDS = 5
+RETRY_SECONDS = 1
 
 
 class ShutterRemote:

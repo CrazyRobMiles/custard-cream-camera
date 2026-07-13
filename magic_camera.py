@@ -139,6 +139,7 @@ class MagicCamera():
         self.datestamp_settings = settings.get("datestamp", {})
 
         self.finder = None
+        self.last_metadata = None
         self.img = None
         self.running = None
         self.save_file_name = None
@@ -463,13 +464,24 @@ class MagicCamera():
         return self.custard_cream_client
 
     def live_frame(self):
-        """The current viewfinder frame, with the EV readout overlaid if compensation is active."""
-        if self.exposure_value == 0:
-            return self.finder
-
+        """The current viewfinder frame, with the EV setting and actual metered shutter speed/
+        gain overlaid - showing the real numbers (not just the EV setting) so it's obvious
+        whether the exposure compensation buttons are actually reaching the AE algorithm.
+        """
         frame = self.finder.copy()
         draw = ImageDraw.Draw(frame)
-        draw.text((frame.width // 2, 20), f"EV {self.exposure_value:+.1f}", font=self.small_font, fill=(255, 255, 0), anchor="mm")
+
+        metadata = self.last_metadata or {}
+        exposure_us = metadata.get("ExposureTime")
+        gain = metadata.get("AnalogueGain")
+
+        parts = [f"EV {self.exposure_value:+.1f}"]
+        if exposure_us:
+            parts.append(f"1/{round(1_000_000 / exposure_us)}s")
+        if gain:
+            parts.append(f"gain {gain:.2f}x")
+
+        draw.text((frame.width // 2, 20), "  ".join(parts), font=self.small_font, fill=(255, 255, 0), anchor="mm")
         return frame
 
     def status_frame(self, text):
@@ -588,6 +600,7 @@ class MagicCamera():
             self.frame_ready.clear()
             request = self.picam2.wait(self.pending_job)
             frame = request.make_array("main")
+            self.last_metadata = request.get_metadata()
             request.release()
 
             self.finder = Image.fromarray(frame, "RGB")

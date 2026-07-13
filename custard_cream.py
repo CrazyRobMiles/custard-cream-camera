@@ -11,7 +11,7 @@ class CustardCreamClient:
     """Wraps the Google GenAI SDK for speech-to-text and Nano Banana image editing."""
 
     def __init__(self, api_key_env="GOOGLE_API_KEY", transcribe_model="gemini-2.5-flash",
-                 edit_model="gemini-2.5-flash-image"):
+                 edit_model="gemini-2.5-flash-image", timeout_seconds=30):
         api_key = os.environ.get(api_key_env)
         if not api_key:
             raise RuntimeError(
@@ -19,7 +19,11 @@ class CustardCreamClient:
                 f"https://aistudio.google.com/apikey and set it before running, e.g. "
                 f"export {api_key_env}=..."
             )
-        self.client = genai.Client(api_key=api_key)
+        # Without an explicit timeout, a stalled connection (flaky wifi, a network path that
+        # silently drops packets, etc.) hangs the request forever with no error at all - ai_pending
+        # would stay stuck, and there'd be no diagnostic to explain why. This turns that into a
+        # bounded, clearly-reported failure instead.
+        self.client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=timeout_seconds * 1000))
         self.transcribe_model = transcribe_model
         self.edit_model = edit_model
 

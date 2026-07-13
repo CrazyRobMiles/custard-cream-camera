@@ -26,7 +26,8 @@
         "channels": 1,
         "max_record_seconds": 15,
         "result_hold_seconds": 4,
-        "device": "plughw:3,0"
+        "device": "plughw:3,0",
+        "timeout_seconds": 30
     },
     "shutter_remote": {
         "enabled": true,

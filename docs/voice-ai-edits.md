@@ -22,6 +22,12 @@ In [Play mode](capture-and-play-modes.md), hold **Speak** (or use the shutter re
    ```
    If you have multiple audio devices, set `"device"` under `"custard_cream"` in settings.json to the right ALSA device name (`arecord -l` lists them) — it's `null` by default, which uses the system default input.
 
-5. **Test it.** [Play mode](capture-and-play-modes.md) has no option to take a fresh photo, so press **Click** first (in Capture mode) if you haven't taken any yet. Then: launch the app, tap **Play**, hold **Speak**, say something like "make it look like a watercolor painting," and release. Watch the terminal (or `magic_camera.log`) for `Voice prompt: ...` — that confirms transcription worked; the edited image should then appear on screen and save to `captures/ai_<timestamp>.jpg`.
+5. **Test it.** [Play mode](capture-and-play-modes.md) has no option to take a fresh photo, so press **Click** first (in Capture mode) if you haven't taken any yet. Then: launch the app, tap **Play**, hold **Speak**, say something like "make it look like a watercolor painting," and release. The edited image should then appear on screen and save to `captures/ai_<timestamp>.jpg`.
 
 Recording length and the result's on-screen hold time are also configurable under `"custard_cream"` in settings.json. The model IDs (`transcribe_model`, `edit_model`) may need adjusting as Google's model naming evolves — check the current names in the [Gemini API docs](https://ai.google.dev/gemini-api/docs/models) if editing fails with a "model not found" style error.
+
+## Diagnostics
+
+Every stage prints a `Speak: ...` line to the terminal (or `magic_camera.log`), so a stuck or failed edit can be narrowed down to exactly where it stopped: recording start/stop (with the captured file size), which photo is being used, the request sent for transcription and its result, the request sent for image editing, and the response received (including any text the model returned instead of an image, e.g. a safety refusal — normally invisible, since the caller only ever sees `None`).
+
+Requests to Gemini time out after `"timeout_seconds"` (default `30`) under `"custard_cream"` in settings.json — without this, a stalled connection (flaky wifi, a network path that silently drops packets) would hang indefinitely with no error and no diagnostic output at all, which is exactly what "stuck after sending for transcription" with no further `Speak:` lines indicates. If it happens repeatedly even with a normally-reliable connection, try raising `"timeout_seconds"` in case it's just Gemini being slow rather than the connection actually stalling.

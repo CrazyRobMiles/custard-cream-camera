@@ -552,6 +552,7 @@ class MagicCamera():
                 api_key_env=self.custard_cream_settings.get("api_key_env", "GOOGLE_API_KEY"),
                 transcribe_model=self.custard_cream_settings.get("transcribe_model", "gemini-2.5-flash"),
                 edit_model=self.custard_cream_settings.get("edit_model", "gemini-2.5-flash-image"),
+                timeout_seconds=self.custard_cream_settings.get("timeout_seconds", 30),
             )
         return self.custard_cream_client
 

@@ -90,15 +90,24 @@ class MagicCamera():
         self.picam2.configure(self.preview_config)
         self.picam2.start()
 
-        # Exposure compensation: biases the auto-exposure algorithm (still enabled) by a number
-        # of EV stops, rather than replacing it with a fixed manual exposure - useful for
-        # backlit subjects etc. via the on-screen +/- buttons, without giving up auto-exposure.
+        # Exposure compensation via the on-screen +/- buttons, for backlit subjects etc. The
+        # libcamera "ExposureValue" control (the "correct" way to bias AE without disabling it)
+        # turned out to be a no-op on this camera/tuning stack - confirmed by watching the
+        # on-screen shutter-speed readout while pressing the buttons and seeing it never move -
+        # so instead this snapshots the AE-computed ExposureTime/AnalogueGain as a baseline the
+        # moment EV moves off zero (see exposure_baseline below) and explicitly scales
+        # ExposureTime by 2**ev from that baseline, handing control back to AE at EV 0.
         exposure_settings = settings.get("exposure", {})
         self.ev_step = exposure_settings.get("step", 0.5)
         self.ev_min = exposure_settings.get("min", -2.0)
         self.ev_max = exposure_settings.get("max", 2.0)
         self.exposure_value = exposure_settings.get("default", 0.0)
-        self.picam2.set_controls({"ExposureValue": self.exposure_value})
+        # (exposure_time_us, analogue_gain) captured from AE right as EV last moved off zero -
+        # every subsequent adjustment scales from this fixed point rather than the live reading,
+        # since once AE is disabled the live reading is just our own last override, not a fresh
+        # measurement - reading from it again would compound drift on repeated presses instead
+        # of giving a clean, repeatable +/- N stops from where AE actually metered the scene.
+        self.exposure_baseline = None
 
         self.frame_ready = Event()
 
@@ -206,8 +215,36 @@ class MagicCamera():
             self.shutter_remote.start()
 
     def adjust_exposure(self, delta):
-        self.exposure_value = round(min(self.ev_max, max(self.ev_min, self.exposure_value + delta)), 2)
-        self.picam2.set_controls({"ExposureValue": self.exposure_value})
+        new_value = round(min(self.ev_max, max(self.ev_min, self.exposure_value + delta)), 2)
+        if new_value == self.exposure_value:
+            return
+        self.exposure_value = new_value
+
+        if self.exposure_value == 0:
+            self.exposure_baseline = None
+            self.picam2.set_controls({"AeEnable": True})
+            return
+
+        if self.exposure_baseline is None:
+            metadata = self.last_metadata or {}
+            base_exposure = metadata.get("ExposureTime")
+            base_gain = metadata.get("AnalogueGain")
+            if not base_exposure:
+                # No AE reading available yet (shouldn't normally happen - the viewfinder is
+                # already streaming by the time buttons are enabled) - nothing to scale from.
+                self.exposure_value -= delta
+                return
+            self.exposure_baseline = (base_exposure, base_gain)
+
+        base_exposure, base_gain = self.exposure_baseline
+        new_exposure = int(base_exposure * (2 ** self.exposure_value))
+        exp_min, exp_max, _ = self.picam2.camera_controls["ExposureTime"]
+        new_exposure = max(exp_min, min(exp_max, new_exposure))
+
+        controls = {"AeEnable": False, "ExposureTime": new_exposure}
+        if base_gain:
+            controls["AnalogueGain"] = base_gain
+        self.picam2.set_controls(controls)
 
     def save_image(self):
         ts = time.strftime("%Y%m%d_%H%M%S")

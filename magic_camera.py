@@ -249,9 +249,11 @@ class MagicCamera():
         self.picam2.set_controls(controls)
 
     def play_sound(self, path):
-        """Best-effort audio playback via `aplay` - fires and forgets rather than waiting for
-        the sound to finish, and never raises: a missing/misconfigured audio device (or no
-        audio hardware at all) should mean silence, not a broken shutter button.
+        """Best-effort audio playback via `aplay` - doesn't block the caller on the sound
+        finishing, and never raises: a missing/misconfigured audio device (or no audio hardware
+        at all) should mean silence, not a broken shutter button. A background thread still
+        waits on it just to print `aplay`'s own error output if it fails, since otherwise a
+        failure here is completely invisible - there'd be no sound and no clue why not.
         """
         if not self.audio_output_settings.get("enabled", True):
             return
@@ -263,9 +265,18 @@ class MagicCamera():
         args.append(str(path))
 
         try:
-            subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         except OSError as e:
             print(f"Could not play sound {path}: {e}")
+            return
+
+        def wait_and_report():
+            _, stderr = process.communicate()
+            if process.returncode != 0:
+                print(f"aplay failed (exit {process.returncode}) playing {path}: "
+                      f"{stderr.decode(errors='replace').strip()}")
+
+        Thread(target=wait_and_report, daemon=True).start()
 
     def save_image(self):
         ts = time.strftime("%Y%m%d_%H%M%S")

@@ -90,6 +90,8 @@ class MagicCamera():
         self.picam2.configure(self.preview_config)
         self.picam2.start()
 
+        self.audio_output_settings = settings.get("audio_output", {})
+
         # Exposure compensation via the on-screen +/- buttons, for backlit subjects etc. The
         # libcamera "ExposureValue" control (the "correct" way to bias AE without disabling it)
         # turned out to be a no-op on this camera/tuning stack - confirmed by watching the
@@ -246,6 +248,25 @@ class MagicCamera():
             controls["AnalogueGain"] = base_gain
         self.picam2.set_controls(controls)
 
+    def play_sound(self, path):
+        """Best-effort audio playback via `aplay` - fires and forgets rather than waiting for
+        the sound to finish, and never raises: a missing/misconfigured audio device (or no
+        audio hardware at all) should mean silence, not a broken shutter button.
+        """
+        if not self.audio_output_settings.get("enabled", True):
+            return
+
+        args = ["aplay", "-q"]
+        device = self.audio_output_settings.get("device")
+        if device:
+            args += ["-D", device]
+        args.append(str(path))
+
+        try:
+            subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            print(f"Could not play sound {path}: {e}")
+
     def save_image(self):
         ts = time.strftime("%Y%m%d_%H%M%S")
         self.save_file_name = self.save_dir / f"capture_{ts}.jpg"
@@ -253,8 +274,11 @@ class MagicCamera():
         self.last_photo_path = self.save_file_name
         print(f"Saved {self.save_file_name}")
 
-        # Flash the screen white, briefly - the shutter remote/keyboard triggers have no other
-        # feedback, so this makes it obvious a photo was actually taken.
+        # Flash the screen white and play a shutter sound, briefly - the shutter remote/keyboard
+        # triggers have no other feedback, so this makes it obvious a photo was actually taken.
+        shutter_sound = self.audio_output_settings.get("shutter_sound")
+        if shutter_sound:
+            self.play_sound(Path(__file__).parent / shutter_sound)
         white_frame = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (255, 255, 255))
         self.show_result(white_frame, hold_seconds=0.5)
 

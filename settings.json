@@ -26,7 +26,7 @@
         "channels": 1,
         "max_record_seconds": 15,
         "result_hold_seconds": 4,
-        "device": null
+        "device": "plughw:3,0"
     },
     "shutter_remote": {
         "enabled": true,
@@ -43,6 +43,11 @@
     "camera": {
         "hflip": true,
         "vflip": true
+    },
+    "audio_output": {
+        "enabled": true,
+        "device": null,
+        "shutter_sound": "assets/audio/shutter.wav"
     },
     "exposure": {
         "default": 0.0,

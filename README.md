@@ -19,6 +19,7 @@ Raspberry Pi HQ Camera using `picamera2` and displays it on an LCD panel. You ca
 * [Image Browser](docs/image-browser.md) — how Speak/Print/Publish let you pick which photo to act on.
 * [Voice-Prompted AI Edits](docs/voice-ai-edits.md) — record a spoken instruction and have Gemini edit the photo.
 * [Bluetooth Shutter Remote](docs/shutter-remote.md) — trigger photos and voice edits from a physical remote instead of the touchscreen.
+* [Audio Output (Shutter Sound)](docs/audio-output.md) — a click sound plays when a photo is taken, configurable and safe to enable even with no audio hardware present.
 
 ## Printing & Publishing
 

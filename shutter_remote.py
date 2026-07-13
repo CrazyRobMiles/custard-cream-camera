@@ -39,6 +39,7 @@ class ShutterRemote:
         self.thread = None
         self.running = False
         self.devices = []
+        self._reported_not_found = False
 
         # The exact key codes we care about (e.g. KEY_VOLUMEUP, KEY_ENTER) - used to auto-select
         # matching devices by capability when device_name isn't given, so there's nothing to look
@@ -94,11 +95,17 @@ class ShutterRemote:
         while self.running:
             self.devices = self._open_devices()
             if not self.devices:
-                print(f"ShutterRemote: no matching input devices found - retrying every {RETRY_SECONDS}s "
-                      "(is the remote paired and connected?)")
+                # Only reported on the transition into "not found" - at a 1s retry interval this
+                # would otherwise print continuously for as long as the remote stays disconnected,
+                # burying any other console/log output.
+                if not self._reported_not_found:
+                    print(f"ShutterRemote: no matching input devices found - retrying every {RETRY_SECONDS}s "
+                          "(is the remote paired and connected?)")
+                    self._reported_not_found = True
                 time.sleep(RETRY_SECONDS)
                 continue
 
+            self._reported_not_found = False
             print("ShutterRemote: listening on " + ", ".join(d.name for d in self.devices))
             self._listen()
             # _listen() returns once every device has disconnected - loop back and retry discovery

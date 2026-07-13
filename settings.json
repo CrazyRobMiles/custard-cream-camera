@@ -20,8 +20,8 @@
     },
     "custard_cream": {
         "api_key_env": "GOOGLE_API_KEY",
-        "transcribe_model": "gemini-2.5-flash",
-        "edit_model": "gemini-2.5-flash-image",
+        "transcribe_model": "gemini-3.5-flash",
+        "edit_model": "gemini-3.1-flash-image",
         "sample_rate": 16000,
         "channels": 1,
         "max_record_seconds": 15,

@@ -2,8 +2,8 @@
 
 Cheap Bluetooth camera remotes don't have a real "pairing mode" — they just have two buttons/positions (labelled iOS/Android or similar) that each send a different key, since iOS and Android camera apps historically listened for different shortcuts. [shutter_remote.py](../shutter_remote.py) listens for both directly at the input-device level (via `evdev`), independent of which window has focus:
 
-* **iOS** button → Volume Up (`KEY_VOLUMEUP`) → takes a photo, the same action as the **Click** button.
-* **Android** button → Enter (`KEY_ENTER`) → hold-to-talk, the same as the **Speak** button: pressing starts recording, releasing sends it. This relies on the remote sending a genuine press-then-release pair for a physical hold, which is normal HID keyboard behavior, but worth confirming for your specific unit (see below).
+* **iOS** button → Volume Up (`KEY_VOLUMEUP`) → takes a photo in [Capture mode](capture-and-play-modes.md), the same action as the **Click** button - or, if you're currently in Play mode reviewing photos, switches back to Capture mode without taking a photo.
+* **Android** button → Enter (`KEY_ENTER`) → hold-to-talk, the same as **Play** mode's **Speak** button: pressing starts recording, releasing sends it. Unlike the photo key, this works from any mode - it always acts on a fresh capture, bypassing Play mode entirely. This relies on the remote sending a genuine press-then-release pair for a physical hold, which is normal HID keyboard behavior, but worth confirming for your specific unit (see below).
 
 To enable it:
 
@@ -28,4 +28,15 @@ sudo apt install evtest
 sudo evtest   # pick your remote from the list, press a button, read the KEY_ name and device name
 ```
 
-**Not being detected?** `shutter_remote.py` retries device discovery every few seconds (Bluetooth remotes routinely disconnect between presses to save battery, and may not even be connected yet when the app starts), so it should pick the remote up on its own within a few seconds of it reconnecting. If it still doesn't, try power-cycling the remote — a stale/half-open Bluetooth connection from a previous session is a common cause and a fresh reconnect usually clears it.
+**Not being detected?** `shutter_remote.py` retries device discovery every second (Bluetooth remotes routinely disconnect between presses to save battery, and may not even be connected yet when the app starts), so it should pick the remote up on its own within a second or two of it reconnecting. If it still doesn't, try power-cycling the remote — a stale/half-open Bluetooth connection from a previous session is a common cause and a fresh reconnect usually clears it.
+
+**Was working, then stopped reconnecting entirely?** `shutter_remote.py` only watches for input devices the OS has already connected — it doesn't drive Bluetooth pairing/reconnection itself, so if `bluetoothd` stops auto-reconnecting to the remote, there's nothing for it to find no matter how long it retries. Check:
+```bash
+bluetoothctl devices          # find the remote's MAC address
+bluetoothctl info <MAC>       # check Paired/Connected/Trusted
+```
+If `Paired: yes` but `Connected: no`, and `Trusted: no`, that's very likely the cause — an untrusted paired device doesn't get automatically reconnected by `bluetoothd` the same way a trusted one does, so once it disconnects (its normal power-saving behavior) it just stays disconnected until something explicitly reconnects it. Fix it with:
+```bash
+bluetoothctl trust <MAC>
+```
+which should make it reconnect immediately and keep auto-reconnecting from then on.

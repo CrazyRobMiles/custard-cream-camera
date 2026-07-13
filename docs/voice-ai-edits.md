@@ -1,6 +1,6 @@
 # Voice-Prompted AI Edits
 
-Choose a photo via the image browser (or use the shutter remote's speak key) and hold **Select** (or the remote button), say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app transcribes what you said and sends it with the chosen image to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg` and shown on screen for a few seconds. This is implemented in [custard_cream.py](../custard_cream.py); the viewfinder and other buttons stay responsive while it's working since the network calls run on a background thread.
+In [Play mode](capture-and-play-modes.md), hold **Speak** (or use the shutter remote's speak key, which works from any mode), say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app transcribes what you said and sends it with the currently displayed image to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg`, shown on screen for a few seconds, and becomes the new current selection in Play mode. This is implemented in [custard_cream.py](../custard_cream.py); the viewfinder and other buttons stay responsive while it's working since the network calls run on a background thread.
 
 ## Setup
 
@@ -22,6 +22,6 @@ Choose a photo via the image browser (or use the shutter remote's speak key) and
    ```
    If you have multiple audio devices, set `"device"` under `"custard_cream"` in settings.json to the right ALSA device name (`arecord -l` lists them) — it's `null` by default, which uses the system default input.
 
-5. **Test it.** **Speak** opens the [image browser](image-browser.md) over photos already in `captures/` — it has no option to take a fresh one, so press **Click** first if you haven't taken any photos yet. Then: launch the app, tap **Speak**, tap a thumbnail to preview it, hold **Select**, say something like "make it look like a watercolor painting," and release. Watch the terminal (or `magic_camera.log`) for `Voice prompt: ...` — that confirms transcription worked; the edited image should then appear on screen and save to `captures/ai_<timestamp>.jpg`.
+5. **Test it.** [Play mode](capture-and-play-modes.md) has no option to take a fresh photo, so press **Click** first (in Capture mode) if you haven't taken any yet. Then: launch the app, tap **Play**, hold **Speak**, say something like "make it look like a watercolor painting," and release. Watch the terminal (or `magic_camera.log`) for `Voice prompt: ...` — that confirms transcription worked; the edited image should then appear on screen and save to `captures/ai_<timestamp>.jpg`.
 
 Recording length and the result's on-screen hold time are also configurable under `"custard_cream"` in settings.json. The model IDs (`transcribe_model`, `edit_model`) may need adjusting as Google's model naming evolves — check the current names in the [Gemini API docs](https://ai.google.dev/gemini-api/docs/models) if editing fails with a "model not found" style error.

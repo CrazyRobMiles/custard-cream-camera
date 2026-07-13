@@ -1,6 +1,6 @@
 # Printing
 
-The **Print** button (via the image browser) sends the chosen photo to CUPS (`lp <file>`) — see the [Canon SELPHY CP400 setup](printer-cups-setup.md) for getting a printer configured. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `magic_camera.py`.
+The **Print** button (in [Play mode](capture-and-play-modes.md)) sends the currently displayed photo to CUPS (`lp <file>`) — see the [Canon SELPHY CP400 setup](printer-cups-setup.md) for getting a printer configured. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `magic_camera.py`.
 
 By default `lp` is called with no `-d` flag, meaning it uses CUPS's configured default destination — if you get `lp: Error - No default destination`, either set one with `sudo lpadmin -d <printer-name>` (see `lpstat -p -d` for the list of configured printers and current default), or set `"printer": "<printer-name>"` under `"printing"` in [settings.json](../settings.json) to have the app always target that printer explicitly, independent of the system default.
 

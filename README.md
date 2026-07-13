@@ -16,7 +16,7 @@ Raspberry Pi HQ Camera using `picamera2` and displays it on an LCD panel. You ca
 
 * [Camera Orientation](docs/camera-orientation.md) — fix an upside-down or mirrored viewfinder with `hflip`/`vflip`.
 * [Exposure Compensation](docs/exposure-compensation.md) — bias the auto-exposure with on-screen EV+/EV- buttons for backlit or overexposed scenes.
-* [Image Browser](docs/image-browser.md) — how Speak/Print/Publish let you pick which photo to act on.
+* [Capture Mode and Play Mode](docs/capture-and-play-modes.md) — the live viewfinder vs. reviewing/printing/speaking/publishing existing photos.
 * [Voice-Prompted AI Edits](docs/voice-ai-edits.md) — record a spoken instruction and have Gemini edit the photo.
 * [Bluetooth Shutter Remote](docs/shutter-remote.md) — trigger photos and voice edits from a physical remote instead of the touchscreen.
 * [Audio Output (Shutter Sound)](docs/audio-output.md) — a click sound plays when a photo is taken, configurable and safe to enable even with no audio hardware present.

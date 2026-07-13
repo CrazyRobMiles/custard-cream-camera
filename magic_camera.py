@@ -121,20 +121,31 @@ class MagicCamera():
 
         button_y = self.screen.HEIGHT - 50
 
-        # Speak/Print/Publish all open the image browser rather than acting immediately - see
-        # enter_browse(). There's no on-screen quit button any more - use keyboard 'q', or
+        # Capture mode: live viewfinder, take a photo or switch to Play mode to review/act on
+        # existing ones. There's no on-screen quit button any more - use keyboard 'q', or
         # Escape/window-close on the HDMI backends.
-        self.main_menu = (
-            Button(0, button_y, 110, 50, "Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
-            Button(123, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), None, lambda: self.enter_browse("speak")),
-            Button(246, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, lambda: self.enter_browse("print")),
-            Button(369, button_y, 110, 50, "Publish", self.medium_font, (255, 255, 255), (150, 90, 0), None, lambda: self.enter_browse("publish")),
+        self.capture_menu = (
+            Button(0, button_y, 230, 50, "Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
+            Button(250, button_y, 230, 50, "Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
             # Exposure compensation - tucked into the top corners since the bottom row is full.
             Button(0, 0, 50, 40, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
             Button(430, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
         )
 
-        self.screen.set_buttons(self.main_menu)
+        # Play mode: reviews/acts on captures/ directly - Print/Speak/Publish always target
+        # whatever's currently selected (self.play_index), no separate "choose, then act" step.
+        # Left/Right step through images one at a time; Page opens a 3x3 grid to jump further.
+        self.play_menu = (
+            Button(0, button_y, 110, 50, "Capture", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
+            Button(123, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
+            Button(246, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), up_handler=self.finish_play_voice_prompt, down_handler=self.start_voice_prompt),
+            Button(369, button_y, 110, 50, "Publish", self.medium_font, (255, 255, 255), (150, 90, 0), None, self.play_publish),
+            Button(430, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
+            Button(0, 110, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
+            Button(448, 110, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
+        )
+
+        self.screen.set_buttons(self.capture_menu)
 
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
@@ -156,15 +167,15 @@ class MagicCamera():
         self.save_file_name = None
         self.last_photo_path = None
 
-        # Image browser ("Speak"/"Print" buttons): mode is one of "live", "browse_grid",
-        # "browse_preview". browse_view holds whatever the current grid/preview frame is, drawn
-        # in place of the live viewfinder while mode != "live".
-        self.mode = "live"
-        self.browse_pending_action = None
-        self.browse_images = []
-        self.browse_page = 0
-        self.browse_selected_path = None
-        self.browse_view = None
+        # mode is one of "capture", "play", "play_grid". play_view holds whatever the current
+        # single-image/grid frame is, drawn in place of the live viewfinder while in Play mode.
+        # play_images/play_index track the review position - Print/Speak/Publish always act on
+        # play_images[play_index], no separate "choose, then act" step.
+        self.mode = "capture"
+        self.play_images = []
+        self.play_index = 0
+        self.play_page = 0
+        self.play_view = None
 
         # Voice-prompted AI edit ("Speak" button)
         custard_cream_settings = settings.get("custard_cream", {})
@@ -360,41 +371,70 @@ class MagicCamera():
             self.show_result(self.status_frame("Print failed"), hold_seconds=2)
 
     # ------------------------------------------------------------
-    # Image browser ("Speak"/"Print" open this to pick which photo to act on)
+    # Capture mode <-> Play mode
     # ------------------------------------------------------------
 
-    def enter_browse(self, action):
+    def enter_capture(self):
+        self.mode = "capture"
+        self.screen.set_buttons(self.capture_menu)
+        if self.finder is not None:
+            self.screen.draw(self.live_frame())
+
+    def enter_play(self):
+        """Always lands on the most recently taken photo - see show_play_image()."""
         if self.ai_pending or self.publish_pending:
             return
-        self.browse_pending_action = action
-        self.browse_page = 0
-        self.browse_images = sorted(
+        self.play_page = 0
+        self.play_images = sorted(
             (p for p in self.save_dir.glob("*.jpg") if p.name != "ai_source.jpg"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
-        self.show_browse_grid()
+        self.play_index = 0
+        self.show_play_image()
 
-    def exit_browse(self):
-        self.mode = "live"
-        self.browse_pending_action = None
-        self.browse_selected_path = None
-        self.browse_images = []
-        self.screen.set_buttons(self.main_menu)
-        if self.finder is not None:
-            self.screen.draw(self.finder)
-
-    def show_browse_grid(self):
-        self.mode = "browse_grid"
+    def show_play_image(self):
+        """The main Play-mode view: one photo at a time, full screen. Print/Speak/Publish act
+        directly on play_images[play_index] - no separate "choose, then act" step."""
+        self.mode = "play"
         button_y = self.screen.HEIGHT - 50
 
-        if not self.browse_images:
+        if not self.play_images:
             self.screen.set_buttons((
-                Button(330, button_y, 150, 50, "Quit", self.medium_font, (255, 255, 255), (150, 0, 0), None, self.exit_browse),
+                Button(0, button_y, 480, 50, "Capture", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
             ))
-            self.browse_view = self.status_frame("No photos yet")
-            self.screen.draw(self.browse_view)
+            self.play_view = self.status_frame("No photos yet")
+            self.screen.draw(self.play_view)
             return
+
+        path = self.play_images[self.play_index]
+        try:
+            self.play_view = Image.open(path).convert("RGB").resize((self.screen.WIDTH, self.screen.HEIGHT))
+        except Exception as e:
+            print(f"Could not load {path}: {e}")
+            self.play_view = self.status_frame("Could not load photo")
+
+        self.screen.set_buttons(self.play_menu)
+        self.screen.draw(self.play_view)
+
+    def play_prev_image(self):
+        """"<" - steps to an older photo."""
+        if self.play_index < len(self.play_images) - 1:
+            self.play_index += 1
+            self.show_play_image()
+
+    def play_next_image(self):
+        """">" - steps to a newer photo."""
+        if self.play_index > 0:
+            self.play_index -= 1
+            self.show_play_image()
+
+    def show_play_grid(self):
+        """"Page" button - a 3x3 grid to jump further than one image at a time."""
+        if self.ai_pending or self.publish_pending or not self.play_images:
+            return
+        self.mode = "play_grid"
+        button_y = self.screen.HEIGHT - 50
 
         self.screen.set_buttons(())
         self.screen.draw(self.status_frame("Loading..."))
@@ -405,8 +445,8 @@ class MagicCamera():
         cell_w = self.screen.WIDTH // cols
         cell_h = grid_height // rows
 
-        page_start = self.browse_page * per_page
-        page_images = self.browse_images[page_start:page_start + per_page]
+        page_start = self.play_page * per_page
+        page_images = self.play_images[page_start:page_start + per_page]
 
         canvas = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (20, 20, 20))
         thumb_buttons = []
@@ -424,77 +464,50 @@ class MagicCamera():
             except Exception as e:
                 print(f"Could not load thumbnail {path}: {e}")
 
+            absolute_index = page_start + i
             thumb_buttons.append(Button(
                 cell_x, cell_y, cell_w, cell_h, "", self.small_font, (0, 0, 0), (0, 0, 0),
-                up_handler=None, down_handler=(lambda p=path: self.show_browse_preview(p)), visible=False,
+                up_handler=None, down_handler=(lambda idx=absolute_index: self.select_play_grid_image(idx)), visible=False,
             ))
 
-        self.browse_view = canvas
+        self.play_view = canvas
 
         nav_buttons = (
-            Button(0, button_y, 150, 50, "Left", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.browse_prev_page),
-            Button(165, button_y, 150, 50, "Right", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.browse_next_page),
-            Button(330, button_y, 150, 50, "Quit", self.medium_font, (255, 255, 255), (150, 0, 0), None, self.exit_browse),
+            Button(0, button_y, 150, 50, "Left", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_prev_page),
+            Button(165, button_y, 150, 50, "Right", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_next_page),
+            Button(330, button_y, 150, 50, "Back", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image),
         )
         self.screen.set_buttons((*nav_buttons, *thumb_buttons))
-        self.screen.draw(self.browse_view)
+        self.screen.draw(self.play_view)
 
-    def browse_prev_page(self):
-        if self.browse_page > 0:
-            self.browse_page -= 1
-            self.show_browse_grid()
+    def select_play_grid_image(self, index):
+        self.play_index = index
+        self.show_play_image()
 
-    def browse_next_page(self):
-        max_page = (len(self.browse_images) - 1) // 9
-        if self.browse_page < max_page:
-            self.browse_page += 1
-            self.show_browse_grid()
+    def play_grid_prev_page(self):
+        if self.play_page > 0:
+            self.play_page -= 1
+            self.show_play_grid()
 
-    def show_browse_preview(self, path):
-        self.mode = "browse_preview"
-        self.browse_selected_path = path
+    def play_grid_next_page(self):
+        max_page = (len(self.play_images) - 1) // 9
+        if self.play_page < max_page:
+            self.play_page += 1
+            self.show_play_grid()
 
-        try:
-            self.browse_view = Image.open(path).convert("RGB").resize((self.screen.WIDTH, self.screen.HEIGHT))
-        except Exception as e:
-            print(f"Could not load {path}: {e}")
-            self.show_browse_grid()
+    def play_print(self):
+        if not self.play_images:
             return
+        self.print_image(self.play_images[self.play_index])
+        self.show_play_image()
 
-        button_y = self.screen.HEIGHT - 50
-        if self.browse_pending_action == "speak":
-            # Hold-to-talk, same as the original Speak button, just targeting this chosen image.
-            select_btn = Button(
-                0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
-                up_handler=self.finish_selected_voice_prompt, down_handler=self.start_voice_prompt,
-            )
-        elif self.browse_pending_action == "publish":
-            select_btn = Button(
-                0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
-                up_handler=None, down_handler=self.select_browse_publish,
-            )
-        else:
-            select_btn = Button(
-                0, button_y, 230, 50, "Select", self.medium_font, (255, 255, 255), (0, 110, 0),
-                up_handler=None, down_handler=self.select_browse_print,
-            )
-        ignore_btn = Button(
-            250, button_y, 230, 50, "Ignore", self.medium_font, (255, 255, 255), (90, 90, 90),
-            up_handler=None, down_handler=self.show_browse_grid,
-        )
-
-        self.screen.set_buttons((select_btn, ignore_btn))
-        self.screen.draw(self.browse_view)
-
-    def select_browse_print(self):
-        self.print_image(self.browse_selected_path)
-        self.exit_browse()
-
-    def finish_selected_voice_prompt(self):
-        self.finish_voice_prompt(image_path=self.browse_selected_path)
+    def finish_play_voice_prompt(self):
+        if not self.play_images:
+            return
+        self.finish_voice_prompt(image_path=self.play_images[self.play_index])
 
     # ------------------------------------------------------------
-    # Publishing ("Publish" button, via the image browser)
+    # Publishing ("Publish" button, in Play mode)
     # ------------------------------------------------------------
 
     def get_publisher(self):
@@ -502,10 +515,12 @@ class MagicCamera():
             self.publisher = create_publisher(self.settings)
         return self.publisher
 
-    def select_browse_publish(self):
+    def play_publish(self):
+        if not self.play_images or self.publish_pending:
+            return
         self.publish_pending = True
         self.publish_done.clear()
-        Thread(target=self.run_publish, args=(self.browse_selected_path,), daemon=True).start()
+        Thread(target=self.run_publish, args=(self.play_images[self.play_index],), daemon=True).start()
 
     def run_publish(self, image_path):
         """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on the network."""
@@ -525,7 +540,7 @@ class MagicCamera():
         self.publish_result = None
         self.publish_done.clear()
         self.show_result(self.status_frame(message), hold_seconds=2)
-        self.exit_browse()
+        self.show_play_image()
 
     # ------------------------------------------------------------
     # Voice-prompted AI edit ("Speak" button: hold to record, release to send)
@@ -562,7 +577,12 @@ class MagicCamera():
         return frame
 
     def status_frame(self, text):
-        base = self.finder if self.finder is not None else Image.new("RGB", (480, 320), (0, 0, 0))
+        if self.mode in ("play", "play_grid") and self.play_view is not None:
+            base = self.play_view
+        elif self.finder is not None:
+            base = self.finder
+        else:
+            base = Image.new("RGB", (480, 320), (0, 0, 0))
         frame = base.copy()
         draw = ImageDraw.Draw(frame)
         draw.rectangle((0, frame.height // 2 - 25, frame.width, frame.height // 2 + 25), fill=(0, 0, 0))
@@ -585,13 +605,13 @@ class MagicCamera():
         except Exception as e:
             print(f"Could not start recording: {e}")
             self.show_result(self.status_frame("Mic error"), hold_seconds=2)
-            if self.browse_pending_action == "speak":
-                self.exit_browse()
+            if self.mode == "play":
+                self.show_play_image()
             return
         self.screen.draw(self.status_frame("Recording... release to send"))
 
     def finish_voice_prompt(self, image_path=None):
-        """image_path: use this existing photo (from the browser) instead of capturing a fresh one."""
+        """image_path: use this existing photo (from Play mode) instead of capturing a fresh one."""
         if self.ai_pending:
             self.audio_recorder.stop()
             return
@@ -599,8 +619,8 @@ class MagicCamera():
         audio_path = self.audio_recorder.stop()
         if audio_path is None:
             self.show_result(self.status_frame("No audio captured"), hold_seconds=2)
-            if self.browse_pending_action == "speak":
-                self.exit_browse()
+            if self.mode == "play":
+                self.show_play_image()
             return
 
         if image_path is None:
@@ -638,7 +658,7 @@ class MagicCamera():
         result = self.ai_result
         self.ai_result = None
         self.ai_done.clear()
-        came_from_browse = self.browse_pending_action == "speak"
+        came_from_play = self.mode == "play"
 
         try:
             if result is None:
@@ -657,11 +677,16 @@ class MagicCamera():
 
             result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((480, 320))
             self.show_result(result_img, hold_seconds=self.custard_cream_settings.get("result_hold_seconds", 4))
+
+            if came_from_play:
+                # The new edit becomes the current selection, same as if it had just been taken.
+                self.play_images.insert(0, out_path)
+                self.play_index = 0
         finally:
-            # Only if this edit was triggered via the image browser's "Select" - the remote's
-            # direct hold-to-talk never enters browse mode, so this is a no-op for that path.
-            if came_from_browse:
-                self.exit_browse()
+            # Only if this edit was triggered from Play mode - the remote's direct hold-to-talk
+            # never touches Play mode, so this is a no-op for that path.
+            if came_from_play:
+                self.show_play_image()
 
     def request_next_frame(self):
         self.pending_job = self.picam2.capture_request(
@@ -682,7 +707,7 @@ class MagicCamera():
 
             self.finder = Image.fromarray(frame, "RGB")
 
-            if self.mode == "live":
+            if self.mode == "capture":
                 dirty = True
 
             self.request_next_frame()
@@ -693,7 +718,13 @@ class MagicCamera():
         if self.remote_photo_requested.is_set():
             self.remote_photo_requested.clear()
             if not self.ai_pending:
-                self.save_image()
+                # In Play mode the physical shutter button switches back to Capture without
+                # taking a photo - it shouldn't blindly capture whatever the camera happens to
+                # be pointed at while you're mid-review of past photos.
+                if self.mode in ("play", "play_grid"):
+                    self.enter_capture()
+                else:
+                    self.save_image()
 
         if self.remote_speak_down.is_set():
             self.remote_speak_down.clear()
@@ -716,8 +747,8 @@ class MagicCamera():
                 self.screen.draw(self.status_frame("Processing..."))
             elif self.publish_pending:
                 self.screen.draw(self.status_frame("Publishing..."))
-            elif self.mode in ("browse_grid", "browse_preview"):
-                self.screen.draw(self.browse_view)
+            elif self.mode in ("play", "play_grid"):
+                self.screen.draw(self.play_view)
             elif self.finder is not None:
                 self.screen.draw(self.live_frame())
 
@@ -736,7 +767,12 @@ class MagicCamera():
                     if key.lower() == "q":
                         return
                     elif key == " ":
-                        self.save_image()
+                        # Same "switch to Capture rather than shoot blind" rule as the physical
+                        # shutter remote - see the equivalent branch in process_frame().
+                        if self.mode in ("play", "play_grid"):
+                            self.enter_capture()
+                        else:
+                            self.save_image()
 
         except KeyboardInterrupt:
             pass

@@ -45,5 +45,6 @@ class FlickrPublisher(BasePublisher):
             filename=str(image_path),
             tags=combined_tags,
             is_public=1 if self.is_public else 0,
+            format="etree",
         )
         return response.attrib.get("stat") == "ok"

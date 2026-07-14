@@ -8,13 +8,11 @@ In [Play mode](capture-and-play-modes.md), hold **Speak** (or use the shutter re
 
 2. **Make sure the SDK is installed.** `google-genai` is already in [requirements.txt](../requirements.txt), so it's pulled in by the normal `pip install -r requirements.txt` venv setup — nothing extra needed unless your venv predates that being added.
 
-3. **Set the API key as an environment variable.** `NanoBananaClient.py` reads it from `GOOGLE_API_KEY` by default (the variable name is itself configurable via `"api_key_env"` under `"custard_cream"` in [settings.json](../settings.json)) — deliberately *not* stored in `settings.json`, since that file is checked into git:
+3. **Set the API key as an environment variable.** `NanoBananaClient.py` reads it from `GOOGLE_API_KEY` by default (the variable name is itself configurable via `"api_key_env"` under `"custard_cream"` in [settings.json](../settings.json)) — deliberately *not* stored in `settings.json`, since that file is checked into git. For a quick one-off test from a terminal:
    ```bash
    export GOOGLE_API_KEY="your-api-key"
    ```
-   Run this before starting the app from a terminal.
-
-   If you're launching from the [desktop icon](running-the-app.md) instead, this needs to be set before `run_custard_cream_camera.sh` runs. Adding the `export` line to `~/.bashrc` is the usual suggestion, but a heads-up: `.desktop` files typically exec the script directly rather than through a login/interactive shell, so `~/.bashrc` doesn't always get sourced (behavior varies by desktop environment). The reliable way to check is to look at `custard_cream_camera.log` after a desktop-icon launch — if the key isn't visible, you'll see `NanoBananaClient.py`'s own clear error: `No API key found in environment variable 'GOOGLE_API_KEY'...`. If that happens, the most robust fix is adding the `export` line directly into `run_custard_cream_camera.sh` itself, right after its `cd "$DIR"` line — that's guaranteed to run regardless of desktop environment quirks, since it's the script actually being executed.
+   For it to be set automatically every time the app runs (including from the desktop icon, with no terminal involved) see [Storing API Keys on the Device](api-keys.md).
 
 4. **Check the microphone.** Needs `arecord` (part of `alsa-utils`, normally already installed on Raspberry Pi OS — `sudo apt install alsa-utils` if not). Confirm it works standalone first:
    ```bash

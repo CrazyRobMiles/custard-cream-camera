@@ -6,6 +6,12 @@
 DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 cd "$DIR"
 
+# API keys (GOOGLE_API_KEY, FLICKR_API_KEY, FLICKR_API_SECRET) go in secrets.sh, not here -
+# that file is gitignored, so real keys never end up committed. See docs/api-keys.md.
+if [ -f "$DIR/secrets.sh" ]; then
+    source "$DIR/secrets.sh"
+fi
+
 if [ -f "$DIR/venv/bin/activate" ]; then
     source "$DIR/venv/bin/activate"
 fi

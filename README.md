@@ -25,6 +25,7 @@ Raspberry Pi HQ Camera using `picamera2` and displays it on an LCD panel. You ca
 
 * [Printing](docs/printing.md) — send photos to CUPS, test the pipeline without wasting paper, and add a watermark/date stamp.
 * [Publishing to Flickr](docs/publishing-flickr.md) — one-time OAuth setup, then upload photos straight from the app.
+* [Storing API Keys on the Device](docs/api-keys.md) — get the Gemini/Flickr keys set automatically on every launch, without committing them to git.
 
 ## Hardware Setup Guides
 

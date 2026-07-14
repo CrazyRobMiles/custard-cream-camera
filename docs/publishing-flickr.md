@@ -20,7 +20,7 @@ Flickr uses OAuth 1.0a, which needs a real browser to authorize the app — but 
 
 After that, **Publish** works with no further browser interaction — `custard_cream_camera.py` only ever does the upload itself, using the cached token. If it's ever missing or expired, publishing fails with a clear message pointing back at this script rather than trying to prompt interactively (there's no browser available from a background upload thread).
 
-If launching from a desktop icon, add the two `export` lines to `~/.bashrc` so they're set before `run_custard_cream_camera.sh` runs — same as the Gemini API key.
+For these to be set automatically every time the app runs (including from the desktop icon), see [Storing API Keys on the Device](api-keys.md) — same as the Gemini API key.
 
 ## Configuration
 

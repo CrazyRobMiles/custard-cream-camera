@@ -4,3 +4,4 @@ venv/
 captures/
 print_tests/
 custard_cream_camera.log
+secrets.sh

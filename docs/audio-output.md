@@ -1,6 +1,6 @@
 # Audio Output (Shutter Sound)
 
-Taking a photo (via the **Click** button, the [shutter remote](shutter-remote.md), or the spacebar) plays a short click sound in addition to the white screen flash, via `aplay`. This is implemented as a fire-and-forget call in `play_sound()` in [magic_camera.py](../magic_camera.py) - it never blocks on the sound finishing, and never raises if playback fails, so a missing or misconfigured audio device just means silence instead of a broken shutter button. This makes it safe to leave enabled even on a device with no audio hardware at all.
+Taking a photo (via the **Click** button, the [shutter remote](shutter-remote.md), or the spacebar) plays a short click sound in addition to the white screen flash, via `aplay`. This is implemented as a fire-and-forget call in `play_sound()` in [custard_cream_camera.py](../custard_cream_camera.py) - it never blocks on the sound finishing, and never raises if playback fails, so a missing or misconfigured audio device just means silence instead of a broken shutter button. This makes it safe to leave enabled even on a device with no audio hardware at all.
 
 Configurable under `"audio_output"` in [settings.json](../settings.json):
 

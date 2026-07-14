@@ -22,7 +22,7 @@ class HDMIDesktopDisplay(BaseDisplay):
         super().__init__()
 
         self.root = tk.Tk()
-        self.root.title("Magic Camera")
+        self.root.title("Custard Cream Camera")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.bind("<Escape>", lambda event: self._on_close())
         self.root.configure(bg="black")

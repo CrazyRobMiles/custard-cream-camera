@@ -1,6 +1,6 @@
 # Publishing to Flickr
 
-The **Publish** button (in [Play mode](capture-and-play-modes.md)) uploads the currently displayed photo to Flickr, tagged with whatever's configured in `settings.json`. This is built as a pluggable layer in [publishers/](../publishers/) — the same shape as [displays/](../displays/) — so other services (Instagram, a self-hosted gallery, whatever) could be added later as siblings to `flickr_publisher.py` without touching `magic_camera.py` beyond a new `"type"` branch in `publishers/__init__.py`.
+The **Publish** button (in [Play mode](capture-and-play-modes.md)) uploads the currently displayed photo to Flickr, tagged with whatever's configured in `settings.json`. This is built as a pluggable layer in [publishers/](../publishers/) — the same shape as [displays/](../displays/) — so other services (Instagram, a self-hosted gallery, whatever) could be added later as siblings to `flickr_publisher.py` without touching `custard_cream_camera.py` beyond a new `"type"` branch in `publishers/__init__.py`.
 
 ## One-time setup
 
@@ -18,9 +18,9 @@ Flickr uses OAuth 1.0a, which needs a real browser to authorize the app — but 
    ```
    It prints a URL — open it in a browser on *any* device (your phone is fine, it doesn't have to be the Pi), log into Flickr, authorize the app, and paste the verification code it gives you back into the terminal. This caches an access token locally (via `flickrapi`'s own cache, typically `~/.flickr/`).
 
-After that, **Publish** works with no further browser interaction — `magic_camera.py` only ever does the upload itself, using the cached token. If it's ever missing or expired, publishing fails with a clear message pointing back at this script rather than trying to prompt interactively (there's no browser available from a background upload thread).
+After that, **Publish** works with no further browser interaction — `custard_cream_camera.py` only ever does the upload itself, using the cached token. If it's ever missing or expired, publishing fails with a clear message pointing back at this script rather than trying to prompt interactively (there's no browser available from a background upload thread).
 
-If launching from a desktop icon, add the two `export` lines to `~/.bashrc` so they're set before `run_magic_camera.sh` runs — same as the Gemini API key.
+If launching from a desktop icon, add the two `export` lines to `~/.bashrc` so they're set before `run_custard_cream_camera.sh` runs — same as the Gemini API key.
 
 ## Configuration
 

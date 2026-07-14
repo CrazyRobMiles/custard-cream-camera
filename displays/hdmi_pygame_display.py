@@ -30,7 +30,7 @@ class HDMIPygameDisplay(BaseDisplay):
         # instead. (0, 0) tells it to use the desktop's current resolution instead.
         size = (0, 0) if fullscreen else (window_width, window_height)
         self.surface = pygame.display.set_mode(size, flags)
-        pygame.display.set_caption("Magic Camera")
+        pygame.display.set_caption("Custard Cream Camera")
 
         driver = pygame.display.get_driver()
         print(f"HDMIPygameDisplay: SDL video driver '{driver}', surface size {self.surface.get_size()}")

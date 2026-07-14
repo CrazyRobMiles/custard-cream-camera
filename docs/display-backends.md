@@ -1,6 +1,6 @@
 # Display Backends
 
-`magic_camera.py` renders through a pluggable display layer in [displays/](../displays/). Three backends are provided:
+`custard_cream_camera.py` renders through a pluggable display layer in [displays/](../displays/). Three backends are provided:
 
 * `ili9486` — the SPI ILI9486 LCD + XPT2046 touch panel ([displays/ili9486_display.py](../displays/ili9486_display.py))
 * `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([displays/hdmi_desktop_display.py](../displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app. This is the simplest option and the one to try first on a device with a native HDMI display.

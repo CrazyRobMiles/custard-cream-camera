@@ -1,10 +1,10 @@
 """One-time interactive Flickr authorization.
 
-Run this manually from a terminal - not part of the main camera app - to authorize magic_camera.py
+Run this manually from a terminal - not part of the main camera app - to authorize custard_cream_camera.py
 to publish to your Flickr account. It opens a 3-legged OAuth 1.0a flow: you visit a URL in any
 browser (doesn't have to be on the Pi), approve the app, and paste back the verification code
 Flickr gives you. The resulting access token is cached locally, so this only needs to be done
-once - after that, the Publish button in magic_camera.py works without any further browser step.
+once - after that, the Publish button in custard_cream_camera.py works without any further browser step.
 
 Usage:
     export FLICKR_API_KEY=...
@@ -41,7 +41,7 @@ def main():
     print(f"Open this URL in a browser and authorize the app:\n\n{authorize_url}\n")
     verifier = input("Paste the verification code Flickr gives you here: ").strip()
     flickr.get_access_token(verifier)
-    print("Authorized - the access token is now cached. magic_camera.py can publish to Flickr now.")
+    print("Authorized - the access token is now cached. custard_cream_camera.py can publish to Flickr now.")
 
 
 if __name__ == "__main__":

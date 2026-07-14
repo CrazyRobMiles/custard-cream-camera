@@ -11,16 +11,16 @@ if [ -f "$DIR/venv/bin/activate" ]; then
 fi
 
 if [ -t 1 ]; then
-    python3 magic_camera.py
+    python3 custard_cream_camera.py
     status=$?
     if [ $status -ne 0 ]; then
         echo
-        echo "magic_camera.py exited with an error (status $status)."
+        echo "custard_cream_camera.py exited with an error (status $status)."
         read -p "Press Enter to close this window..."
     fi
 else
     # No terminal attached (e.g. launched from a desktop icon with
     # Terminal=false) - nothing to print to, so log instead.
-    python3 magic_camera.py >>"$DIR/magic_camera.log" 2>&1
+    python3 custard_cream_camera.py >>"$DIR/custard_cream_camera.log" 2>&1
     status=$?
 fi

@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 from picamera2 import Picamera2
 
 from displays import Button, create_display
-from custard_cream import AudioRecorder, CustardCreamClient
+from NanoBananaClient import AudioRecorder, CustardCreamClient
 from print_overlays import apply_datestamp, apply_watermark
 from publishers import create_publisher
 from shutter_remote import ShutterRemote
@@ -48,7 +48,7 @@ class Keyboard:
         termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old)
 
 
-class MagicCamera():
+class CustardCreamCamera():
 
     def __init__(self):
         settings = load_settings()
@@ -186,7 +186,7 @@ class MagicCamera():
             max_seconds=custard_cream_settings.get("max_record_seconds", 15),
             device=custard_cream_settings.get("device"),
         )
-        self.audio_path = Path(tempfile.gettempdir()) / "magic_camera_prompt.wav"
+        self.audio_path = Path(tempfile.gettempdir()) / "custard_cream_camera_prompt.wav"
         self.custard_cream_client = None
         self.ai_pending = False
         self.ai_done = Event()
@@ -334,7 +334,7 @@ class MagicCamera():
             except Exception as e:
                 print(f"Could not apply date stamp: {e}")
 
-        out_path = Path(tempfile.gettempdir()) / "magic_camera_print.jpg"
+        out_path = Path(tempfile.gettempdir()) / "custard_cream_camera_print.jpg"
         img.save(out_path, "JPEG", quality=95)
         return out_path
 
@@ -832,8 +832,8 @@ class MagicCamera():
 
 
 def main():
-    magic_camera = MagicCamera()
-    magic_camera.run()
+    custard_cream_camera = CustardCreamCamera()
+    custard_cream_camera.run()
 
 
 if __name__ == "__main__":

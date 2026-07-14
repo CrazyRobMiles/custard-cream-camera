@@ -35,17 +35,25 @@ def load_settings():
 
 class Keyboard:
     def __init__(self):
-        self.fd = sys.stdin.fileno()
-        self.old = termios.tcgetattr(self.fd)
-        tty.setcbreak(self.fd)
+        # Launched from a desktop icon (Terminal=false), stdin isn't a real
+        # TTY, so termios setup would raise - keyboard shortcuts just aren't
+        # available in that case, since touch/the shutter remote cover it.
+        self.enabled = sys.stdin.isatty()
+        if self.enabled:
+            self.fd = sys.stdin.fileno()
+            self.old = termios.tcgetattr(self.fd)
+            tty.setcbreak(self.fd)
 
     def get_key(self):
+        if not self.enabled:
+            return None
         if select.select([sys.stdin], [], [], 0)[0]:
             return sys.stdin.read(1)
         return None
 
     def close(self):
-        termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old)
+        if self.enabled:
+            termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old)
 
 
 class CustardCreamCamera():

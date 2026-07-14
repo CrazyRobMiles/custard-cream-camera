@@ -191,6 +191,12 @@ class MagicCamera():
         self.ai_pending = False
         self.ai_done = Event()
         self.ai_result = None
+        # Set by run_ai_edit() as soon as transcription comes back, so the "Processing..." status
+        # can switch to showing the actual prompt while the (usually much slower) image edit
+        # call is still in flight - ai_prompt_ready just forces a redraw at that moment, since
+        # dirty otherwise only becomes true on user input or when the whole edit finishes.
+        self.ai_prompt_text = None
+        self.ai_prompt_ready = Event()
 
         # Publishing ("Publish" button) - pluggable, see publishers/. Lazily created since it
         # needs API credentials that may not be configured if the feature isn't used, and runs
@@ -578,6 +584,10 @@ class MagicCamera():
         return frame
 
     def status_frame(self, text):
+        """A short status banner over the current backdrop. Word-wraps to as many lines as
+        needed - most callers pass a short fixed string that always fits on one line (unchanged
+        from before), but a transcribed voice prompt can run to a full sentence.
+        """
         if self.mode in ("play", "play_grid") and self.play_view is not None:
             base = self.play_view
         elif self.finder is not None:
@@ -586,8 +596,31 @@ class MagicCamera():
             base = Image.new("RGB", (480, 320), (0, 0, 0))
         frame = base.copy()
         draw = ImageDraw.Draw(frame)
-        draw.rectangle((0, frame.height // 2 - 25, frame.width, frame.height // 2 + 25), fill=(0, 0, 0))
-        draw.text((frame.width // 2, frame.height // 2), text, font=self.medium_font, fill=(255, 255, 255), anchor="mm")
+
+        max_width = frame.width - 20
+        words = text.split()
+        lines = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if draw.textlength(candidate, font=self.medium_font) <= max_width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        if not lines:
+            lines = [text]
+
+        line_height = 40
+        block_height = line_height * len(lines) + 10
+        top = frame.height // 2 - block_height // 2
+        draw.rectangle((0, top, frame.width, top + block_height), fill=(0, 0, 0))
+        for i, line in enumerate(lines):
+            y = top + 10 + i * line_height + line_height // 2
+            draw.text((frame.width // 2, y), line, font=self.medium_font, fill=(255, 255, 255), anchor="mm")
         return frame
 
     def show_result(self, img, hold_seconds):
@@ -636,6 +669,7 @@ class MagicCamera():
             print(f"Speak: using existing photo {still_path}")
 
         self.ai_pending = True
+        self.ai_prompt_text = None
         self.ai_done.clear()
         Thread(target=self.run_ai_edit, args=(audio_path, still_path), daemon=True).start()
 
@@ -647,6 +681,8 @@ class MagicCamera():
             if not prompt_text:
                 self.ai_result = ("status", "Didn't catch that")
             else:
+                self.ai_prompt_text = prompt_text
+                self.ai_prompt_ready.set()
                 edited_bytes = client.edit_image(still_path.read_bytes(), prompt_text)
                 if edited_bytes is None:
                     self.ai_result = ("status", "No image returned")
@@ -662,6 +698,7 @@ class MagicCamera():
         self.ai_pending = False
         result = self.ai_result
         self.ai_result = None
+        self.ai_prompt_text = None
         self.ai_done.clear()
         came_from_play = self.mode == "play"
 
@@ -739,6 +776,10 @@ class MagicCamera():
             self.remote_speak_up.clear()
             self.finish_voice_prompt()
 
+        if self.ai_prompt_ready.is_set():
+            self.ai_prompt_ready.clear()
+            dirty = True
+
         if self.ai_pending and self.ai_done.is_set():
             self.finish_ai_edit()
             dirty = True
@@ -749,7 +790,7 @@ class MagicCamera():
 
         if dirty:
             if self.ai_pending:
-                self.screen.draw(self.status_frame("Processing..."))
+                self.screen.draw(self.status_frame(self.ai_prompt_text or "Processing..."))
             elif self.publish_pending:
                 self.screen.draw(self.status_frame("Publishing..."))
             elif self.mode in ("play", "play_grid"):

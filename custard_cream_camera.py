@@ -148,6 +148,7 @@ class CustardCreamCamera():
             Button(123, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
             Button(246, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), up_handler=self.finish_play_voice_prompt, down_handler=self.start_voice_prompt),
             Button(369, button_y, 110, 50, "Publish", self.medium_font, (255, 255, 255), (150, 90, 0), None, self.play_publish),
+            Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
             Button(430, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
             Button(0, 110, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
             Button(448, 110, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
@@ -393,6 +394,11 @@ class CustardCreamCamera():
         self.screen.set_buttons(self.capture_menu)
         if self.finder is not None:
             self.screen.draw(self.live_frame())
+
+    def quit_app(self):
+        """"Stop" in the play menu - the only on-screen way to exit cleanly when launched from
+        the desktop icon, where there's no keyboard or window chrome to quit with."""
+        self.running = False
 
     def enter_play(self):
         """Always lands on the most recently taken photo - see show_play_image()."""

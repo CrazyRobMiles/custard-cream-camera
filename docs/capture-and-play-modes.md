@@ -14,10 +14,11 @@ Reviews and acts on photos already in `captures/`, one at a time, full screen:
 * **Print** / **Speak** / **Publish** — act immediately on whichever photo is currently shown, no separate "choose, then act" step. **Speak** is hold-to-talk: press to record an editing instruction, release to send it, exactly like Capture mode's old Speak button but targeting the photo on screen instead of a fresh capture. See [Voice-Prompted AI Edits](voice-ai-edits.md), [Printing](printing.md), and [Publishing to Flickr](publishing-flickr.md) for what each of those actually does.
 * **`<`** / **`>`** (small buttons on the left/right screen edges) — step to the previous/next photo one at a time, newest-first.
 * **Page** (top-right corner) — opens a 3×3 grid of the current page of 9 photos; tapping a thumbnail makes it the current selection and returns to the single-photo view. **Left**/**Right** in the grid page through older/newer groups of 9; **Back** returns to the single-photo view without changing the selection.
+* **Stop** (top-left corner) — exits the app cleanly. This is the only on-screen way to quit, for when it's launched from the [desktop icon](running-the-app.md) with no keyboard or window chrome available.
 
 Entering Play mode (via the **Play** button, from anywhere) always lands on the most recently taken photo - it re-scans `captures/` fresh each time rather than remembering a stale position from last visit. An AI edit or a fresh **Click** while reviewing similarly become the new current selection, the same as if you'd just taken them.
 
-There's no on-screen quit button in either mode — press keyboard `q` in the terminal, or (on the HDMI backends) Escape / close the window.
+There's no on-screen quit button in Capture mode — switch to Play mode and use **Stop**, or press keyboard `q` in the terminal, or (on the HDMI backends) Escape / close the window.
 
 ## The physical shutter remote and keyboard spacebar
 

@@ -18,6 +18,8 @@ Flickr uses OAuth 1.0a, which needs a real browser to authorize the app — but 
    ```
    It prints a URL — open it in a browser on *any* device (your phone is fine, it doesn't have to be the Pi), log into Flickr, authorize the app, and paste the verification code it gives you back into the terminal. This caches an access token locally (via `flickrapi`'s own cache, typically `~/.flickr/`).
 
+   Prefer a device other than the Pi for this if you can: opening the browser directly on the Pi's own desktop can trigger a keyring/password dialog that stays open (and stays modal) behind the camera app afterwards, silently blocking all clicks until it's dismissed — see [Touch/clicks stop responding](display-backends.md#touchclicks-stop-responding-but-the-cursor-still-moves) in the display backends doc.
+
 After that, **Publish** works with no further browser interaction — `custard_cream_camera.py` only ever does the upload itself, using the cached token. If it's ever missing or expired, publishing fails with a clear message pointing back at this script rather than trying to prompt interactively (there's no browser available from a background upload thread).
 
 For these to be set automatically every time the app runs (including from the desktop icon), see [Storing API Keys on the Device](api-keys.md) — same as the Gemini API key.

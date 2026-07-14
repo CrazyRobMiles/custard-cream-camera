@@ -1,3 +1,5 @@
+import time
+
 from PIL import ImageFont
 
 
@@ -122,8 +124,16 @@ class ButtonPanel:
     and reports whether anything changed, so the caller knows whether to redraw.
     """
 
+    # Menus reuse screen real estate - a button in the new menu can sit at the exact
+    # coordinates a button in the old one occupied. Real touchscreens can report a stray
+    # extra press/release right on the heels of the tap that caused the swap (electrical
+    # bounce, or a finger not quite lifted yet); without this guard that stray event lands
+    # on whatever's now underneath instead of being harmlessly dropped.
+    SWITCH_GUARD_SECONDS = 0.3
+
     def __init__(self):
         self.buttons = []
+        self._switched_at = 0.0
 
     def set_buttons(self, buttons):
         for button in self.buttons:
@@ -131,17 +141,22 @@ class ButtonPanel:
         self.buttons = buttons
         for button in self.buttons:
             button.enable()
+        self._switched_at = time.monotonic()
 
     def draw(self, draw):
         for button in self.buttons:
             button.draw(draw)
 
     def press(self, x, y):
+        if time.monotonic() - self._switched_at < self.SWITCH_GUARD_SECONDS:
+            return
         for button in self.buttons:
             if button.check_coord(x, y):
                 button.set_down()
 
     def release(self, x, y):
+        if time.monotonic() - self._switched_at < self.SWITCH_GUARD_SECONDS:
+            return
         for button in self.buttons:
             if button.check_coord(x, y):
                 button.set_up()

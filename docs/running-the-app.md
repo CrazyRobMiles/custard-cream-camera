@@ -24,3 +24,4 @@ To install it:
    ```bash
    chmod +x ~/Desktop/custard-cream-camera.desktop
    ```
+   On Raspberry Pi OS's default file manager, PCManFM, double-clicking instead pops up an "Execute / Execute in Terminal / Open / Cancel" menu every time, even once the file is executable - this isn't the same "untrusted" mechanism GNOME/Nautilus uses (so `gio set metadata::trusted` has no effect here), it's a PCManFM-only setting. Fix it via **File Manager → Edit → Preferences → General → "Don't ask options on launch executable file"**. This writes `quick_exec=1` to PCManFM's own config file - editing that file directly isn't a reliable alternative, since it may not exist yet until PCManFM has been opened/configured at least once. Note this is a global toggle: it suppresses the confirmation for any executable double-clicked on the desktop, not just this icon.

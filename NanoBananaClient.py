@@ -98,14 +98,15 @@ class AudioRecorder:
             args += ["-D", self.device]
         args.append(str(self.path))
 
-        self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
     def stop(self, timeout=5):
         """Stops recording and returns the path to the recorded clip, or None if nothing usable was captured."""
         if self.process is None:
             return None
 
-        if self.process.poll() is None:
+        early_exit = self.process.poll() is not None
+        if not early_exit:
             # SIGINT (not terminate/SIGTERM) is what arecord expects to finalize the WAV
             # header cleanly - the same signal sent when you Ctrl+C it in a terminal.
             self.process.send_signal(signal.SIGINT)
@@ -115,8 +116,17 @@ class AudioRecorder:
                 self.process.kill()
                 self.process.wait()
 
+        returncode = self.process.returncode
+        stderr = self.process.stderr.read().decode(errors="replace").strip() if self.process.stderr else ""
         self.process = None
 
         if self.path.exists() and self.path.stat().st_size > 1024:
             return self.path
+
+        # Nothing usable was captured - log why, so "too quick a tap" can be told
+        # apart from arecord actually failing (device busy, wrong device name, etc).
+        reason = f"arecord exited early (code {returncode})" if early_exit else "recording too short"
+        if stderr:
+            reason += f": {stderr}"
+        print(f"AudioRecorder: no usable audio ({reason})")
         return None

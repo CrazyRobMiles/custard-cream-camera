@@ -75,6 +75,12 @@ class CustardCreamCamera():
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 48
         )
 
+        # The Play menu's four narrow (110px) buttons need a smaller legend than the
+        # wider buttons that also use medium_font - this doesn't affect them.
+        self.play_button_font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26
+        )
+
         self.picam2 = Picamera2()
 
         # Corrects for the sensor being mounted rotated 180 degrees in this build - flip both
@@ -144,10 +150,10 @@ class CustardCreamCamera():
         # whatever's currently selected (self.play_index), no separate "choose, then act" step.
         # Left/Right step through images one at a time; Page opens a 3x3 grid to jump further.
         self.play_menu = (
-            Button(0, button_y, 110, 50, "Capture", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
-            Button(123, button_y, 110, 50, "Print", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
-            Button(246, button_y, 110, 50, "Speak", self.medium_font, (255, 255, 255), (0, 110, 0), up_handler=self.finish_play_voice_prompt, down_handler=self.start_voice_prompt),
-            Button(369, button_y, 110, 50, "Publish", self.medium_font, (255, 255, 255), (150, 90, 0), None, self.play_publish),
+            Button(0, button_y, 110, 50, "Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
+            Button(123, button_y, 110, 50, "Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
+            Button(246, button_y, 110, 50, "Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), up_handler=self.finish_play_voice_prompt, down_handler=self.start_voice_prompt),
+            Button(369, button_y, 110, 50, "Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.play_publish),
             Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
             Button(430, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
             Button(0, 110, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),

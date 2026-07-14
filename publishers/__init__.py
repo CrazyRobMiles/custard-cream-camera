@@ -12,6 +12,10 @@ def create_publisher(settings=None):
         from .flickr_publisher import FlickrPublisher
         return FlickrPublisher(**publish_settings.get("flickr", {}))
 
+    if publisher_type == "bsky":
+        from .bsky_publisher import BskyPublisher
+        return BskyPublisher(**publish_settings.get("bsky", {}))
+
     raise ValueError(f"Unknown publisher type: {publisher_type!r}")
 
 

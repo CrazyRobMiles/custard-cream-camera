@@ -7,3 +7,4 @@ pygame
 google-genai
 evdev
 flickrapi
+atproto

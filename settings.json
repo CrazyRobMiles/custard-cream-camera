@@ -82,6 +82,12 @@
             "tags": "custardcreamcamera",
             "is_public": true,
             "token_cache_dir": null
+        },
+        "bsky": {
+            "handle_env": "BSKY_HANDLE",
+            "app_password_env": "BSKY_APP_PASSWORD",
+            "text": "",
+            "alt_text": ""
         }
     }
 }

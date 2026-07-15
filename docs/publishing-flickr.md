@@ -1,6 +1,6 @@
 # Publishing to Flickr
 
-The **Publish** button (in [Play mode](capture-and-play-modes.md)) uploads the currently displayed photo to Flickr, tagged with whatever's configured in `settings.json`. This is built as a pluggable layer in [publishers/](../publishers/) — the same shape as [displays/](../displays/). [Bluesky](publishing-bsky.md) is already a sibling of `flickr_publisher.py`; other services (Instagram, a self-hosted gallery, whatever) could be added the same way, without touching `custard_cream_camera.py` beyond a new `"type"` branch in `publishers/__init__.py`.
+The **Publish** button (in [Play mode](capture-and-play-modes.md)) opens a menu of every configured destination — tapping **Flickr** there uploads the currently displayed photo, tagged with whatever's configured in `settings.json`. This is built as a pluggable layer in [publishers/](../publishers/) — the same shape as [displays/](../displays/). [Bluesky](publishing-bsky.md) is already a sibling of `flickr_publisher.py`, alongside the self-hosted Custard Cream Server backend; other services (Instagram, whatever) could be added the same way, without touching `custard_cream_camera.py` beyond a new branch in `publishers/create_publisher()` and an entry in `PUBLISHER_LABELS`.
 
 ## One-time setup
 
@@ -28,8 +28,8 @@ For these to be set automatically every time the app runs (including from the de
 
 ```json
 "publish": {
-    "type": "flickr",
     "flickr": {
+        "enabled": true,
         "api_key_env": "FLICKR_API_KEY",
         "api_secret_env": "FLICKR_API_SECRET",
         "tags": "custardcreamcamera",
@@ -39,8 +39,11 @@ For these to be set automatically every time the app runs (including from the de
 }
 ```
 
+* `"enabled"` — set to `false` to take Flickr out of the Publish menu without deleting the rest of its config; defaults to `true` if omitted.
 * `"tags"` — space-separated tags applied to every upload; multi-word tags need their own quotes inside the string, e.g. `"tags": "custardcreamcamera \"family holiday\""`.
 * `"is_public"` — `true` posts immediately visible to anyone on Flickr; set `false` for private (only you) instead.
 * `"token_cache_dir"` — leave `null` to use `flickrapi`'s own default cache location; only set this if you need the token stored somewhere specific.
+
+Every enabled destination under `"publish"` shows up as its own button in the Publish menu. If only one destination ends up enabled, Publish skips the menu entirely and sends straight to it.
 
 Publishing runs on a background thread, the same way the AI edit does, so the viewfinder and other buttons stay responsive during the upload.

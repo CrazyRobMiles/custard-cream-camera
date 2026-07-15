@@ -19,7 +19,7 @@ from picamera2 import Picamera2
 from displays import Button, create_display
 from NanoBananaClient import CustardCreamClient
 from print_overlays import apply_datestamp, apply_watermark
-from publishers import create_publisher
+from publishers import available_publishers, create_publisher, publisher_label
 from shutter_remote import ShutterRemote
 from transcription import create_transcriber
 
@@ -155,7 +155,7 @@ class CustardCreamCamera():
             Button(0, button_y, 110, 50, "Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
             Button(123, button_y, 110, 50, "Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
             Button(246, button_y, 110, 50, "Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), up_handler=self.finish_play_voice_prompt, down_handler=self.start_voice_prompt),
-            Button(369, button_y, 110, 50, "Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.play_publish),
+            Button(369, button_y, 110, 50, "Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
             Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
             Button(430, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
             Button(0, 110, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
@@ -215,11 +215,14 @@ class CustardCreamCamera():
         self.voice_partial_text = None
         self.voice_partial_ready = Event()
 
-        # Publishing ("Publish" button) - pluggable, see publishers/. Lazily created since it
-        # needs API credentials that may not be configured if the feature isn't used, and runs
-        # on a background thread the same way the AI edit does, for the same reason (network I/O
-        # shouldn't block the viewfinder/buttons).
-        self.publisher = None
+        # Publishing ("Publish" button) - pluggable, see publishers/. All configured destinations
+        # are active at once; Publish opens a menu to choose which one this photo goes to, one at
+        # a time (publishing to several means pressing Publish again afterwards for each one).
+        # Publisher instances are lazily created and cached per type, since each needs API
+        # credentials that may not be configured if that particular destination isn't used, and
+        # publish() runs on a background thread the same way the AI edit does, for the same reason
+        # (network I/O shouldn't block the viewfinder/buttons).
+        self.publishers = {}
         self.publish_pending = False
         self.publish_done = Event()
         self.publish_result = None
@@ -543,33 +546,73 @@ class CustardCreamCamera():
     # Publishing ("Publish" button, in Play mode)
     # ------------------------------------------------------------
 
-    def get_publisher(self):
-        if self.publisher is None:
-            self.publisher = create_publisher(self.settings)
-        return self.publisher
+    # Button colour per destination, shown in the publish menu - falls back to grey for any
+    # publisher type not listed here.
+    PUBLISH_MENU_COLOURS = {
+        "flickr": (150, 90, 0),
+        "bsky": (0, 133, 255),
+        "custard_cream_server": (120, 90, 40),
+    }
 
-    def play_publish(self):
+    def get_publisher(self, publisher_type):
+        if publisher_type not in self.publishers:
+            self.publishers[publisher_type] = create_publisher(self.settings, publisher_type)
+        return self.publishers[publisher_type]
+
+    def show_publish_menu(self):
+        """"Publish" button in Play mode - choose which configured destination to send this photo
+        to. Only one destination is published to per selection; to publish to several, press
+        Publish again afterwards and pick another."""
+        if not self.play_images or self.publish_pending:
+            return
+
+        options = available_publishers(self.settings)
+        if not options:
+            self.show_result(self.status_frame("No publishers configured"), hold_seconds=2)
+            self.show_play_image()
+            return
+
+        if len(options) == 1:
+            # Only one destination enabled - skip the menu, there's nothing to choose between.
+            self.start_publish(options[0][0])
+            return
+
+        button_y = self.screen.HEIGHT - 50
+        buttons = [
+            Button(i * 123, button_y, 110, 50, label, self.play_button_font, (255, 255, 255),
+                   self.PUBLISH_MENU_COLOURS.get(publisher_type, (90, 90, 90)), None,
+                   lambda publisher_type=publisher_type: self.start_publish(publisher_type))
+            for i, (publisher_type, label) in enumerate(options)
+        ]
+        buttons.append(Button(len(options) * 123, button_y, 110, 50, "Back", self.play_button_font,
+                               (255, 255, 255), (90, 90, 90), None, self.show_play_image))
+
+        self.screen.set_buttons(tuple(buttons))
+        self.screen.draw(self.play_view)
+
+    def start_publish(self, publisher_type):
         if not self.play_images or self.publish_pending:
             return
         self.publish_pending = True
         self.publish_done.clear()
-        Thread(target=self.run_publish, args=(self.play_images[self.play_index],), daemon=True).start()
+        Thread(target=self.run_publish, args=(self.play_images[self.play_index], publisher_type), daemon=True).start()
 
-    def run_publish(self, image_path):
+    def run_publish(self, image_path, publisher_type):
         """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on the network."""
         self.publish_qr_result = None
+        label = publisher_label(publisher_type)
         try:
-            publisher = self.get_publisher()
+            publisher = self.get_publisher(publisher_type)
             ok = publisher.publish(image_path)
-            self.publish_result = "Published!" if ok else "Publish failed"
+            self.publish_result = f"Published to {label}!" if ok else f"{label} publish failed"
             if ok:
                 # Only custard-cream-server sets this - Flickr/Bluesky publishers have no such
                 # attribute, so the plain text banner path below is unaffected for them.
                 self.publish_qr_result = getattr(publisher, "last_result", None)
                 self.publish_qr_hold_seconds = getattr(publisher, "qr_hold_seconds", 2)
         except Exception as e:
-            print(f"Publish failed: {e}")
-            self.publish_result = "Publish failed"
+            print(f"Publish to {label} failed: {e}")
+            self.publish_result = f"{label} publish failed"
         finally:
             self.publish_done.set()
 

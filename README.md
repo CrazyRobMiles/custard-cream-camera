@@ -3,7 +3,7 @@
 
 ![Image of the camera and a large rubber duck](/images/camera.JPG)
 
-The Custard Cream Camera lets you take pictures, edit them and print them on a built in printer. It will also upload pictures to Flickr and BSky (to be tested).
+The Custard Cream Camera lets you take pictures, edit them and print them on a built in printer. It can also publish pictures to Flickr, Bluesky, and a self-hosted Custard Cream Camera Server — pick which one from a menu on the Publish button.
 
 Inspired by the camera made by [Nikbuild](https://github.com/nickbild/banamera)
 
@@ -26,7 +26,8 @@ Inspired by the camera made by [Nikbuild](https://github.com/nickbild/banamera)
 
 * [Printing](docs/printing.md) — send photos to CUPS, test the pipeline without wasting paper, and add a watermark/date stamp.
 * [Publishing to Flickr](docs/publishing-flickr.md) — one-time OAuth setup, then upload photos straight from the app.
-* [Storing API Keys on the Device](docs/api-keys.md) — get the Gemini/Flickr keys set automatically on every launch, without committing them to git.
+* [Publishing to Bluesky](docs/publishing-bsky.md) — post photos with an app password, no OAuth needed.
+* [Storing API Keys on the Device](docs/api-keys.md) — get the Gemini/Flickr/Bluesky/server keys set automatically on every launch, without committing them to git.
 
 ## Hardware Setup Guides
 

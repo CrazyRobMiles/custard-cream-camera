@@ -5,6 +5,7 @@ API keys are needed depending on which features you use:
 * `GOOGLE_API_KEY` — [Voice-Prompted AI Edits](voice-ai-edits.md), from [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
 * `FLICKR_API_KEY` / `FLICKR_API_SECRET` — [Publishing to Flickr](publishing-flickr.md), from [flickr.com/services/apps/create](https://www.flickr.com/services/apps/create/).
 * `BSKY_HANDLE` / `BSKY_APP_PASSWORD` — [Publishing to Bluesky](publishing-bsky.md), an app password from [bsky.app/settings/app-passwords](https://bsky.app/settings/app-passwords) (not your main account password).
+* `CUSTARD_CREAM_SERVER_EMAIL` / `CUSTARD_CREAM_SERVER_PASSWORD` — publishing to a self-hosted custard-cream-server instance, the login for the camera's account on that server.
 
 All of these are read from environment variables, never from `settings.json` — that file is checked into git, so committing real keys into it would leak them into the repo's history. The question this page actually answers is: how do you make sure those environment variables are set automatically every time the app starts on the device, without typing `export` by hand each session?
 

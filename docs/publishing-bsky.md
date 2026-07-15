@@ -1,6 +1,6 @@
 # Publishing to Bluesky
 
-The **Publish** button (in [Play mode](capture-and-play-modes.md)) can also post the currently displayed photo to Bluesky instead of Flickr, using the [atproto](https://atproto.blue) package. This is a sibling of [flickr_publisher.py](../publishers/flickr_publisher.py) in the same pluggable [publishers/](../publishers/) layer — see [Publishing to Flickr](publishing-flickr.md) for the general shape.
+The **Publish** button (in [Play mode](capture-and-play-modes.md)) opens a menu of every configured destination — tapping **Bluesky** there posts the currently displayed photo, using the [atproto](https://atproto.blue) package. This is a sibling of [flickr_publisher.py](../publishers/flickr_publisher.py) in the same pluggable [publishers/](../publishers/) layer — see [Publishing to Flickr](publishing-flickr.md) for the general shape.
 
 ## One-time setup
 
@@ -19,8 +19,8 @@ For these to be set automatically every time the app runs (including from the de
 
 ```json
 "publish": {
-    "type": "bsky",
     "bsky": {
+        "enabled": true,
         "handle_env": "BSKY_HANDLE",
         "app_password_env": "BSKY_APP_PASSWORD",
         "text": "",
@@ -29,7 +29,7 @@ For these to be set automatically every time the app runs (including from the de
 }
 ```
 
-* `"type"` — set to `"bsky"` to make the Publish button post here instead of Flickr; only one publisher is active at a time.
+* `"enabled"` — set to `false` to take Bluesky out of the Publish menu without deleting the rest of its config; defaults to `true` if omitted.
 * `"text"` — fixed text posted with every photo (e.g. a hashtag). Left empty by default.
 * `"alt_text"` — accessibility alt text attached to the image itself.
 

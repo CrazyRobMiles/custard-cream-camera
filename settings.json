@@ -42,7 +42,7 @@
     },
     "printing": {
         "printer": "SELPHY_CP400",
-        "test_mode": true,
+        "test_mode": false,
         "test_folder": "print_tests"
     },
     "camera": {

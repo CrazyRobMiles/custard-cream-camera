@@ -37,6 +37,13 @@ class VoskTranscriber(BaseTranscriber):
     def start(self, on_partial=None):
         self.recognizer = vosk.KaldiRecognizer(self.model, self.sample_rate)
         self.final_text = None
+        # AcceptWaveform() returns True whenever Vosk hits an internal pause/segment
+        # boundary mid-recording, not just at stop() - each such boundary finalizes
+        # and clears the recognizer's buffer via Result(). Segments already shown via
+        # on_partial() must be accumulated here, since a lone FinalResult() at stop()
+        # only covers audio since the *last* boundary - it can be empty even though
+        # plenty was already recognized, wrongly reading as "no audio captured".
+        self._segments = []
         args = [
             "arecord",
             "-f", "S16_LE",
@@ -55,16 +62,23 @@ class VoskTranscriber(BaseTranscriber):
     def _read_loop(self, on_partial):
         chunk_size = 4000
         stdout = self.process.stdout
+        last_shown = None
         while True:
             data = stdout.read(chunk_size)
             if not data:
                 break
             if self.recognizer.AcceptWaveform(data):
-                text = json.loads(self.recognizer.Result()).get("text", "")
+                segment = json.loads(self.recognizer.Result()).get("text", "")
+                if segment:
+                    self._segments.append(segment)
+                trailing = ""
             else:
-                text = json.loads(self.recognizer.PartialResult()).get("partial", "")
-            if text and on_partial:
-                on_partial(text)
+                trailing = json.loads(self.recognizer.PartialResult()).get("partial", "")
+
+            shown = " ".join(self._segments + ([trailing] if trailing else []))
+            if shown and shown != last_shown and on_partial:
+                on_partial(shown)
+                last_shown = shown
 
     def stop(self, timeout=5):
         """Stops capturing (fast, local only) and returns whether any usable audio
@@ -90,8 +104,14 @@ class VoskTranscriber(BaseTranscriber):
 
         # Only safe to ask for the final result once the reader thread has fed it
         # every buffered chunk - asking earlier can lose the tail of the utterance.
-        result = json.loads(self.recognizer.FinalResult())
-        self.final_text = (result.get("text") or "").strip() or None
+        # This only covers audio since the last mid-recording segment boundary (see
+        # the note in start()) - segments finalized earlier are already in self._segments
+        # and must be included too, or a recording with any pause in it can wrongly
+        # come back empty despite having recognised text throughout.
+        trailing = json.loads(self.recognizer.FinalResult()).get("text", "").strip()
+        if trailing:
+            self._segments.append(trailing)
+        self.final_text = " ".join(self._segments).strip() or None
 
         if self.final_text:
             print(f"Speak: Vosk transcription result: {self.final_text!r}")

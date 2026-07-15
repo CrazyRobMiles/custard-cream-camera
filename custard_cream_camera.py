@@ -17,10 +17,11 @@ from PIL import Image, ImageDraw, ImageFont
 from picamera2 import Picamera2
 
 from displays import Button, create_display
-from NanoBananaClient import AudioRecorder, CustardCreamClient
+from NanoBananaClient import CustardCreamClient
 from print_overlays import apply_datestamp, apply_watermark
 from publishers import create_publisher
 from shutter_remote import ShutterRemote
+from transcription import create_transcriber
 
 SETTINGS_PATH = Path(__file__).parent / "settings.json"
 
@@ -196,14 +197,8 @@ class CustardCreamCamera():
         # Voice-prompted AI edit ("Speak" button)
         custard_cream_settings = settings.get("custard_cream", {})
         self.custard_cream_settings = custard_cream_settings
-        self.audio_recorder = AudioRecorder(
-            sample_rate=custard_cream_settings.get("sample_rate", 16000),
-            channels=custard_cream_settings.get("channels", 1),
-            max_seconds=custard_cream_settings.get("max_record_seconds", 15),
-            device=custard_cream_settings.get("device"),
-        )
-        self.audio_path = Path(tempfile.gettempdir()) / "custard_cream_camera_prompt.wav"
         self.custard_cream_client = None
+        self.transcriber = create_transcriber(settings, self.get_custard_cream_client)
         self.ai_pending = False
         self.ai_done = Event()
         self.ai_result = None
@@ -213,6 +208,12 @@ class CustardCreamCamera():
         # dirty otherwise only becomes true on user input or when the whole edit finishes.
         self.ai_prompt_text = None
         self.ai_prompt_ready = Event()
+        # Set while the Speak button is held. voice_partial_text is updated live by
+        # streaming transcribers (e.g. Vosk) via _on_voice_partial(); batch transcribers
+        # (e.g. Gemini) never update it, leaving the static "Recording..." banner shown.
+        self.voice_recording = False
+        self.voice_partial_text = None
+        self.voice_partial_ready = Event()
 
         # Publishing ("Publish" button) - pluggable, see publishers/. Lazily created since it
         # needs API credentials that may not be configured if the feature isn't used, and runs
@@ -695,7 +696,7 @@ class CustardCreamCamera():
         if self.ai_pending:
             return
         try:
-            self.audio_recorder.start(self.audio_path)
+            self.transcriber.start(on_partial=self._on_voice_partial)
         except Exception as e:
             print(f"Could not start recording: {e}")
             self.show_result(self.status_frame("Mic error"), hold_seconds=2)
@@ -703,22 +704,29 @@ class CustardCreamCamera():
                 self.show_play_image()
             return
         print("Speak: recording started")
+        self.voice_recording = True
+        self.voice_partial_text = None
         self.screen.draw(self.status_frame("Recording... release to send"))
+
+    def _on_voice_partial(self, text):
+        """Called from the transcriber's background thread as live partial results arrive."""
+        self.voice_partial_text = text
+        self.voice_partial_ready.set()
 
     def finish_voice_prompt(self, image_path=None):
         """image_path: use this existing photo (from Play mode) instead of capturing a fresh one."""
+        self.voice_recording = False
         if self.ai_pending:
-            self.audio_recorder.stop()
+            self.transcriber.stop()
             return
 
-        audio_path = self.audio_recorder.stop()
-        if audio_path is None:
+        has_audio = self.transcriber.stop()
+        if not has_audio:
             print("Speak: no audio captured")
             self.show_result(self.status_frame("No audio captured"), hold_seconds=2)
             if self.mode == "play":
                 self.show_play_image()
             return
-        print(f"Speak: recording stopped ({audio_path.stat().st_size} bytes)")
 
         if image_path is None:
             still_path = self.save_dir / "ai_source.jpg"
@@ -731,18 +739,18 @@ class CustardCreamCamera():
         self.ai_pending = True
         self.ai_prompt_text = None
         self.ai_done.clear()
-        Thread(target=self.run_ai_edit, args=(audio_path, still_path), daemon=True).start()
+        Thread(target=self.run_ai_edit, args=(still_path,), daemon=True).start()
 
-    def run_ai_edit(self, audio_path, still_path):
+    def run_ai_edit(self, still_path):
         """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on the network."""
         try:
-            client = self.get_custard_cream_client()
-            prompt_text = client.transcribe(audio_path.read_bytes())
+            prompt_text = self.transcriber.finalize()
             if not prompt_text:
                 self.ai_result = ("status", "Didn't catch that")
             else:
                 self.ai_prompt_text = prompt_text
                 self.ai_prompt_ready.set()
+                client = self.get_custard_cream_client()
                 edited_bytes = client.edit_image(still_path.read_bytes(), prompt_text)
                 if edited_bytes is None:
                     self.ai_result = ("status", "No image returned")
@@ -836,6 +844,10 @@ class CustardCreamCamera():
             self.remote_speak_up.clear()
             self.finish_voice_prompt()
 
+        if self.voice_partial_ready.is_set():
+            self.voice_partial_ready.clear()
+            dirty = True
+
         if self.ai_prompt_ready.is_set():
             self.ai_prompt_ready.clear()
             dirty = True
@@ -849,7 +861,9 @@ class CustardCreamCamera():
             dirty = True
 
         if dirty:
-            if self.ai_pending:
+            if self.voice_recording:
+                self.screen.draw(self.status_frame(self.voice_partial_text or "Recording... release to send"))
+            elif self.ai_pending:
                 self.screen.draw(self.status_frame(self.ai_prompt_text or "Processing..."))
             elif self.publish_pending:
                 self.screen.draw(self.status_frame("Publishing..."))

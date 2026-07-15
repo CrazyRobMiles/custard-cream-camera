@@ -53,6 +53,28 @@ python -m pip install -r requirements.txt
 
 These packages are installed into the virtual environment and do not affect the system Python installation.
 
+## Installing Vosk (Local Speech Recognition)
+
+`vosk` (used for offline transcription in [Voice-Prompted AI Edits](voice-ai-edits.md)) is a normal PyPI package, already listed in `requirements.txt`, so `pip install -r requirements.txt` above installs it like everything else — no apt package needed. Prebuilt wheels are published for 64-bit Raspberry Pi OS (aarch64); older 32-bit (armv7) installs may need to build from source.
+
+Unlike the Python package, the **speech model itself is not installed by pip** — it's a separate download you place on disk yourself:
+
+```bash
+cd ~/my-project   # repository root
+mkdir -p models
+curl -LO https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip -d models
+rm vosk-model-small-en-us-0.15.zip
+```
+
+This should leave a `models/vosk-model-small-en-us-0.15/` folder, matching the default `"custard_cream.vosk.model_path"` in `settings.json` — adjust that setting if you download a different model or unzip it elsewhere. Larger/more accurate models are listed at [alphacephei.com/vosk/models](https://alphacephei.com/vosk/models).
+
+This model is loaded once at app startup (not lazily on first use), so a missing or misconfigured `model_path` will fail the whole app on launch while `"custard_cream.transcribe_provider"` is set to `"vosk"` (the default) — verify it loads before relying on it:
+
+```bash
+python -c "import vosk; vosk.Model('models/vosk-model-small-en-us-0.15'); print('Vosk model OK')"
+```
+
 ## Verifying Camera Support
 
 To check that the virtual environment can access the Raspberry Pi camera libraries:

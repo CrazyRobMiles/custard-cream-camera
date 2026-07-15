@@ -5,6 +5,7 @@ spidev
 RPi.GPIO
 pygame
 google-genai
+vosk
 evdev
 flickrapi
 atproto

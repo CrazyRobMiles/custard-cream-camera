@@ -723,7 +723,7 @@ class CustardCreamCamera():
 
         text_x = qr_x + qr_size + 20
         draw.text((text_x, frame.height // 2 - 30), "Published!", font=self.medium_font, fill=(255, 255, 255))
-        draw.text((text_x, frame.height // 2 + 10), phrase, font=self.medium_font, fill=(255, 255, 0))
+        draw.text((text_x, frame.height // 2 + 10), phrase, font=self.play_button_font, fill=(255, 255, 0))
 
         return frame
 

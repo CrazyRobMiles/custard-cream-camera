@@ -10,14 +10,31 @@ PUBLISHER_LABELS = {
 }
 
 
+def _publisher_class(publisher_type):
+    if publisher_type == "flickr":
+        from .flickr_publisher import FlickrPublisher
+        return FlickrPublisher
+
+    if publisher_type == "bsky":
+        from .bsky_publisher import BskyPublisher
+        return BskyPublisher
+
+    if publisher_type == "custard_cream_server":
+        from .custard_cream_server_publisher import CustardCreamServerPublisher
+        return CustardCreamServerPublisher
+
+    raise ValueError(f"Unknown publisher type: {publisher_type!r}")
+
+
 def available_publishers(settings=None):
-    """Returns [(type, label), ...] for every publisher configured under settings["publish"] that
-    isn't explicitly disabled with "enabled": false (missing "enabled" defaults to on)."""
+    """Returns [(type, button_text), ...] for every publisher configured under settings["publish"]
+    that isn't explicitly disabled with "enabled": false (missing "enabled" defaults to on).
+    button_text is each publisher class's own short label - see Publish menu button widths."""
 
     publish_settings = (settings or {}).get("publish", {})
     return [
-        (publisher_type, label)
-        for publisher_type, label in PUBLISHER_LABELS.items()
+        (publisher_type, _publisher_class(publisher_type).button_text)
+        for publisher_type in PUBLISHER_LABELS
         if publisher_type in publish_settings and publish_settings[publisher_type].get("enabled", True)
     ]
 
@@ -38,20 +55,8 @@ def create_publisher(settings, publisher_type):
     """Instantiate one publish backend by type, using its config block under settings["publish"]."""
 
     publish_settings = (settings or {}).get("publish", {})
-
-    if publisher_type == "flickr":
-        from .flickr_publisher import FlickrPublisher
-        return FlickrPublisher(**_publisher_kwargs(publish_settings, "flickr"))
-
-    if publisher_type == "bsky":
-        from .bsky_publisher import BskyPublisher
-        return BskyPublisher(**_publisher_kwargs(publish_settings, "bsky"))
-
-    if publisher_type == "custard_cream_server":
-        from .custard_cream_server_publisher import CustardCreamServerPublisher
-        return CustardCreamServerPublisher(**_publisher_kwargs(publish_settings, "custard_cream_server"))
-
-    raise ValueError(f"Unknown publisher type: {publisher_type!r}")
+    publisher_class = _publisher_class(publisher_type)
+    return publisher_class(**_publisher_kwargs(publish_settings, publisher_type))
 
 
 __all__ = ["BasePublisher", "create_publisher", "available_publishers", "publisher_label"]

@@ -14,6 +14,7 @@ class BskyPublisher(BasePublisher):
     """
 
     name = "bsky"
+    button_text = "Bsky"
 
     def __init__(self, handle_env="BSKY_HANDLE", app_password_env="BSKY_APP_PASSWORD",
                  text="", alt_text=""):

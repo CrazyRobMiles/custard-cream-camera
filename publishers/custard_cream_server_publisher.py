@@ -22,6 +22,7 @@ class CustardCreamServerPublisher(BasePublisher):
     """
 
     name = "custard_cream_server"
+    button_text = "CC Server"
 
     def __init__(self, base_url, email_env="CUSTARD_CREAM_SERVER_EMAIL",
                  password_env="CUSTARD_CREAM_SERVER_PASSWORD", timeout_seconds=15,

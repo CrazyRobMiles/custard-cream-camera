@@ -1,10 +1,11 @@
 
 # Custard Cream Camera
 
-A homage to the one made by [Nikbuild](https://github.com/nickbild/banamera)
+![Image of the camera and a large rubber duck](/images/camera.JPG)
 
-This repository provides a small Python app that captures video from the
-Raspberry Pi HQ Camera using `picamera2` and displays it on an LCD panel. You can then use AI prompts to edit the picture.
+The Custard Cream Camera lets you take pictures, edit them and print them on a built in printer. It will also upload pictures to Flickr and BSky (to be tested).
+
+Inspired by the camera made by [Nikbuild](https://github.com/nickbild/banamera)
 
 ## Getting Started
 

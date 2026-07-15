@@ -8,3 +8,5 @@ google-genai
 evdev
 flickrapi
 atproto
+requests
+qrcode

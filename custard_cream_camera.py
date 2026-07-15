@@ -11,6 +11,7 @@ import tty
 from pathlib import Path
 from threading import Event, Thread
 
+import qrcode
 from libcamera import Transform
 from PIL import Image, ImageDraw, ImageFont
 from picamera2 import Picamera2
@@ -221,6 +222,11 @@ class CustardCreamCamera():
         self.publish_pending = False
         self.publish_done = Event()
         self.publish_result = None
+        # Set when a publish succeeds against a backend (like custard-cream-server) that hands
+        # back a {"url", "phrase"} result - lets finish_publish() show a QR code + phrase instead
+        # of the plain text banner used for Flickr/Bluesky.
+        self.publish_qr_result = None
+        self.publish_qr_hold_seconds = 2
 
         # Bluetooth shutter remote - the physical button sends a real press+release, so the
         # "speak" key drives hold-to-talk the same way the on-screen Speak button does. All the
@@ -550,10 +556,16 @@ class CustardCreamCamera():
 
     def run_publish(self, image_path):
         """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on the network."""
+        self.publish_qr_result = None
         try:
             publisher = self.get_publisher()
             ok = publisher.publish(image_path)
             self.publish_result = "Published!" if ok else "Publish failed"
+            if ok:
+                # Only custard-cream-server sets this - Flickr/Bluesky publishers have no such
+                # attribute, so the plain text banner path below is unaffected for them.
+                self.publish_qr_result = getattr(publisher, "last_result", None)
+                self.publish_qr_hold_seconds = getattr(publisher, "qr_hold_seconds", 2)
         except Exception as e:
             print(f"Publish failed: {e}")
             self.publish_result = "Publish failed"
@@ -563,9 +575,18 @@ class CustardCreamCamera():
     def finish_publish(self):
         self.publish_pending = False
         message = self.publish_result
+        qr_result = self.publish_qr_result
+        hold_seconds = self.publish_qr_hold_seconds if qr_result else 2
         self.publish_result = None
+        self.publish_qr_result = None
         self.publish_done.clear()
-        self.show_result(self.status_frame(message), hold_seconds=2)
+
+        if qr_result:
+            frame = self.qr_result_frame(qr_result["url"], qr_result["phrase"])
+        else:
+            frame = self.status_frame(message)
+
+        self.show_result(frame, hold_seconds=hold_seconds)
         self.show_play_image()
 
     # ------------------------------------------------------------
@@ -641,6 +662,25 @@ class CustardCreamCamera():
         for i, line in enumerate(lines):
             y = top + 10 + i * line_height + line_height // 2
             draw.text((frame.width // 2, y), line, font=self.medium_font, fill=(255, 255, 255), anchor="mm")
+        return frame
+
+    def qr_result_frame(self, url, phrase):
+        """Shown after a successful publish to custard-cream-server: a QR code linking to the
+        picture's page, plus the three-word phrase as a human-readable fallback for anyone who
+        can't scan it.
+        """
+        frame = Image.new("RGB", (480, 320), (0, 0, 0))
+        draw = ImageDraw.Draw(frame)
+
+        qr_size = 200
+        qr_img = qrcode.make(url).convert("RGB").resize((qr_size, qr_size))
+        qr_x = 20
+        frame.paste(qr_img, (qr_x, frame.height // 2 - qr_size // 2))
+
+        text_x = qr_x + qr_size + 20
+        draw.text((text_x, frame.height // 2 - 30), "Published!", font=self.medium_font, fill=(255, 255, 255))
+        draw.text((text_x, frame.height // 2 + 10), phrase, font=self.medium_font, fill=(255, 255, 0))
+
         return frame
 
     def show_result(self, img, hold_seconds):

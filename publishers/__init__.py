@@ -16,6 +16,10 @@ def create_publisher(settings=None):
         from .bsky_publisher import BskyPublisher
         return BskyPublisher(**publish_settings.get("bsky", {}))
 
+    if publisher_type == "custard_cream_server":
+        from .custard_cream_server_publisher import CustardCreamServerPublisher
+        return CustardCreamServerPublisher(**publish_settings.get("custard_cream_server", {}))
+
     raise ValueError(f"Unknown publisher type: {publisher_type!r}")
 
 

@@ -1,6 +1,7 @@
 __pycache__
 venv/
 .env/
+models/
 captures/
 print_tests/
 custard_cream_camera.log

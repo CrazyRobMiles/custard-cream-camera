@@ -720,7 +720,6 @@ class CustardCreamCamera():
         draw = ImageDraw.Draw(frame)
 
         qr_size = 200
-        url = url.replace(":3001","")
         qr_img = qrcode.make(url).convert("RGB").resize((qr_size, qr_size))
         qr_x = 20
         frame.paste(qr_img, (qr_x, frame.height // 2 - qr_size // 2))

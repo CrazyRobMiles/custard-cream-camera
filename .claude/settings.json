@@ -4,7 +4,8 @@
       "Bash(python3 -c ' *)",
       "WebFetch(domain:ai.google.dev)",
       "Bash(python -m py_compile custard_cream_camera.py transcription/base.py transcription/gemini_transcriber.py transcription/vosk_transcriber.py transcription/__init__.py NanoBananaClient.py)",
-      "Bash(python -m py_compile custard_cream_camera.py publishers/custard_cream_server_publisher.py)"
+      "Bash(python -m py_compile custard_cream_camera.py publishers/custard_cream_server_publisher.py)",
+      "Bash(python -m py_compile custard_cream_camera.py)"
     ]
   }
 }

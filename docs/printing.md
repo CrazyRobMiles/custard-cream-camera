@@ -1,12 +1,28 @@
 # Printing
 
-The **Print** button (in [Play mode](capture-and-play-modes.md)) sends the currently displayed photo to CUPS (`lp <file>`) — see the [Canon SELPHY CP400 setup](printer-cups-setup.md) for getting a printer configured. `lp` only queues the job; if the printer is offline, out of paper, etc., that failure shows up in CUPS (`lpstat`, its web UI, or `/var/log/cups/error_log`) rather than in `custard_cream_camera.py`.
+The **Print** button (in [Play mode](capture-and-play-modes.md)) sends the currently displayed photo to CUPS via [pycups](https://github.com/OpenPrinting/pycups) — see the [Canon SELPHY CP400 setup](printer-cups-setup.md) for getting a printer configured. Submitting and watching the job runs on a background thread, the same way [publishing](../publishers/) and [AI edits](voice-ai-edits.md) do, so the viewfinder/buttons stay responsive while it works.
 
-By default `lp` is called with no `-d` flag, meaning it uses CUPS's configured default destination — if you get `lp: Error - No default destination`, either set one with `sudo lpadmin -d <printer-name>` (see `lpstat -p -d` for the list of configured printers and current default), or set `"printer": "<printer-name>"` under `"printing"` in [settings.json](../settings.json) to have the app always target that printer explicitly, independent of the system default.
+If no `"printer"` is set under `"printing"` in [settings.json](../settings.json), the app falls back to CUPS's configured default destination — if neither exists, printing fails with "No printer configured" (check `lpstat -p -d` for the list of configured printers and current default, and `sudo lpadmin -d <printer-name>` to set one).
+
+## Detecting a Failed Print
+
+Submitting a job only confirms CUPS queued it, not that it actually came out — a paper jam or empty tray fails later, asynchronously. So after submitting, the app polls the job's status (`job-state`/`job-state-reasons`) via the same CUPS connection until it reaches a final state, and shows the result on screen:
+
+* **Printed!** — the job completed.
+* A specific reason (e.g. from `job-printer-state-message`, or the first `job-state-reasons` entry) — the job was canceled or aborted, most often by the printer itself (paper out, a jam).
+* **Print taking longer than expected** — the job hadn't reached a final state after `"job_timeout_seconds"` (default `120`) under `"printing"` in settings.json; raise this if your printer is normally just slower than that.
+
+Since real prints can take a minute or more on the CP400, this polling happens on the same background thread as the submission - see `run_print()`/`wait_for_print_job()` in `custard_cream_camera.py`.
+
+## Recovering From a Stuck Queue
+
+A print that fails outright (e.g. an empty paper tray) can leave CUPS with a disabled, rejecting queue for that printer — every print after it then just piles up in the spool instead of erroring, so nothing comes out even once the printer's fixed. To avoid that, before every print the app clears and re-enables the queue for whichever printer is configured (`reset_printer_queue()`, equivalent to running `cancel -a`, `cupsenable`, and `cupsaccept` on it), using the same CUPS connection as the job submission that follows.
+
+Because this goes through pycups rather than shelling out, it doesn't need `sudo` — CUPS authorizes it directly against the caller's `lpadmin` group membership, the same membership set up in [Canon SELPHY CP400 setup](printer-cups-setup.md#add-your-user-to-the-printer-administration-group). If that account isn't in the group, this step fails, but only logs the failure rather than blocking the print attempt that follows.
 
 ## Print Testing
 
-Set `"test_mode": true` under `"printing"` in [settings.json](../settings.json) to try out the print pipeline — watermark and date stamp included — without spending paper/ink: pressing **Print** saves the exact image that would have been sent to `lp` into `"test_folder"` (default `print_tests/`, gitignored) instead of actually printing it. The console prints exactly where it was saved. Set back to `false` (the default) to resume printing for real.
+Set `"test_mode": true` under `"printing"` in [settings.json](../settings.json) to try out the print pipeline — watermark and date stamp included — without spending paper/ink: pressing **Print** saves the exact image that would have been sent to the printer into `"test_folder"` (default `print_tests/`, gitignored) instead of actually printing it. The console prints exactly where it was saved. Set back to `false` (the default) to resume printing for real.
 
 ## Watermark and Date Stamp
 

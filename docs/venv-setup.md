@@ -8,16 +8,19 @@ Almost every dependency (`pillow`, `numpy`, `spidev`, `RPi.GPIO`, `pygame`) is a
 
 `picamera2` is the one exception. It's built on top of `libcamera`, which talks directly to the Pi's camera ISP and tuning files, and is not published as a portable pip wheel — it has to be the OS build from `apt` so it matches your kernel and camera stack. A plain (isolated) venv can't see that OS-installed package, so we create the venv with `--system-site-packages`: this lets the venv see the apt-installed `picamera2`/`libcamera`, while every other package still installs normally and independently via `pip`.
 
+`pycups` (used for [printing](printing.md)) is a normal PyPI package too, but unlike the others it's a C extension that links against CUPS's own headers at install time, so `libcups2-dev` needs to already be on the system before `pip install -r requirements.txt` gets to it.
+
 ## Installing System Packages
 
-Install `picamera2` and its `libcamera` dependency (Raspberry Pi OS / Debian-like):
+Install `picamera2` and its `libcamera` dependency, plus the CUPS headers `pycups` needs to build (Raspberry Pi OS / Debian-like):
 
 ```bash
 sudo apt update
 sudo apt install -y \
 	python3-picamera2 \
 	python3-libcamera \
-	python3-venv
+	python3-venv \
+	libcups2-dev
 ```
 
 ## Creating the Virtual Environment

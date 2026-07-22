@@ -11,3 +11,4 @@ flickrapi
 atproto
 requests
 qrcode
+pycups

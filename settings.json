@@ -43,7 +43,8 @@
     "printing": {
         "printer": "SELPHY_CP400",
         "test_mode": false,
-        "test_folder": "print_tests"
+        "test_folder": "print_tests",
+        "job_timeout_seconds": 120
     },
     "camera": {
         "hflip": true,

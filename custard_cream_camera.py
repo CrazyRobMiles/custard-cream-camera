@@ -11,6 +11,7 @@ import tty
 from pathlib import Path
 from threading import Event, Thread
 
+import cups
 import qrcode
 from libcamera import Transform
 from PIL import Image, ImageDraw, ImageFont
@@ -24,6 +25,12 @@ from shutter_remote import ShutterRemote
 from transcription import create_transcriber
 
 SETTINGS_PATH = Path(__file__).parent / "settings.json"
+
+# IPP job-state values (RFC 8011 SS5.3.7) - pycups surfaces the raw int rather than named
+# constants, so the ones this code checks for are spelled out here instead.
+CUPS_JOB_STATE_CANCELED = 7
+CUPS_JOB_STATE_ABORTED = 8
+CUPS_JOB_STATE_COMPLETED = 9
 
 
 def load_settings():
@@ -171,11 +178,20 @@ class CustardCreamCamera():
         self.save_dir.mkdir(exist_ok=True)
 
         printing_settings = settings.get("printing", {})
+        self.printing_settings = printing_settings
         self.printer_name = printing_settings.get("printer")
         self.print_test_mode = printing_settings.get("test_mode", False)
         self.print_test_dir = Path(printing_settings.get("test_folder", "print_tests"))
         if self.print_test_mode:
             self.print_test_dir.mkdir(exist_ok=True)
+
+        # Printing ("Print" button) - printFile() only confirms the job was queued with CUPS,
+        # not that it actually came out (paper jams/empty trays fail later, asynchronously), so
+        # the real submit-and-watch work runs on a background thread the same way publish/AI
+        # edit do, for the same reason (network/hardware I/O shouldn't block the viewfinder).
+        self.print_pending = False
+        self.print_done = Event()
+        self.print_result = None
 
         self.watermark_settings = settings.get("watermark", {})
         self.datestamp_settings = settings.get("datestamp", {})
@@ -371,42 +387,117 @@ class CustardCreamCamera():
         return out_path
 
     def print_image(self, path=None):
+        if self.print_pending:
+            return
+
         path = path or self.last_photo_path
         if path is None:
             print("Nothing to print yet")
             self.show_result(self.status_frame("Nothing to print yet"), hold_seconds=2)
+            self.show_play_image()
             return
 
         print_path = self.prepare_print_copy(path)
 
         if self.print_test_mode:
             # Exercises the full pipeline (watermark/date stamp included) without spending
-            # paper/ink - saves what would have been sent to `lp` instead of actually sending it.
+            # paper/ink - saves what would have been sent to the printer instead of actually
+            # sending it.
             ts = time.strftime("%Y%m%d_%H%M%S")
             test_path = self.print_test_dir / f"print_test_{ts}.jpg"
             shutil.copyfile(print_path, test_path)
             print(f"Print testing: saved {test_path} instead of printing")
             self.show_result(self.status_frame("Test print saved"), hold_seconds=2)
+            self.show_play_image()
             return
 
         print(f"Printing {path}" + (f" (with overlays: {print_path})" if print_path != path else ""))
-        self.show_result(self.status_frame("Printing..."), hold_seconds=1)
+        self.print_pending = True
+        self.print_done.clear()
+        self.print_result = None
+        Thread(target=self.run_print, args=(print_path,), daemon=True).start()
 
-        cmd = ["lp"]
-        if self.printer_name:
-            cmd += ["-d", self.printer_name]
-        cmd.append(str(print_path))
-
+    def run_print(self, print_path):
+        """Runs on a background thread: watching the job through to completion can take as long
+        as the physical print itself (a minute or more on the CP400 dye-sub printer), so this
+        can't block the viewfinder/buttons the way the old fire-and-forget `lp` call could.
+        """
         try:
-            # `lp` just queues the job with CUPS and returns immediately - it doesn't wait
-            # for the physical print to finish - so this stays quick regardless of printer speed.
-            subprocess.run(cmd, check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            print(f"Print failed: {e}")
-            if self.printer_name is None:
+            conn = cups.Connection()
+            printer_name = self.printer_name or conn.getDefault()
+            if not printer_name:
                 print("No 'printer' set in settings.json and no CUPS default configured - "
                       "run `lpstat -p -d` to see available printers.")
-            self.show_result(self.status_frame("Print failed"), hold_seconds=2)
+                self.print_result = "No printer configured"
+                return
+
+            self.reset_printer_queue(conn, printer_name)
+            job_id = conn.printFile(printer_name, str(print_path), "Custard Cream Camera", {})
+            self.print_result = self.wait_for_print_job(conn, job_id)
+        except Exception as e:
+            print(f"Print failed: {e}")
+            self.print_result = "Print failed"
+        finally:
+            self.print_done.set()
+
+    def reset_printer_queue(self, conn, printer_name):
+        """Run before every print: a job that fails outright (e.g. an empty paper tray) leaves
+        CUPS with a disabled, rejecting queue - every print after it just piles up in the spool
+        instead of erroring, so nothing ever comes out even once the printer's fixed. Clearing
+        the queue and re-enabling/accepting each time means a print either comes out now or
+        fails loudly, instead of silently queuing behind a stuck printer.
+
+        Uses the same CUPS connection as the job submission that follows, rather than shelling
+        out to `cancel`/`cupsenable`/`cupsaccept` - which also sidesteps needing `sudo` for the
+        latter two, since pycups authorizes these directly against the caller's `lpadmin` group
+        membership (see docs/printer-cups-setup.md).
+        """
+        try:
+            conn.cancelAllJobs(printer_name, purge_files=True)
+            conn.enablePrinter(printer_name)
+            conn.acceptJobs(printer_name)
+        except cups.IPPError as e:
+            print(f"Could not reset printer queue for {printer_name!r}: {e}")
+
+    def wait_for_print_job(self, conn, job_id):
+        """Polls a submitted job until CUPS reports it finished, one way or another, or a
+        timeout elapses. printFile() only confirms the job was queued - without this, a print
+        that fails downstream (out of paper, a jam) would look identical to one that actually
+        came out.
+        """
+        timeout = self.printing_settings.get("job_timeout_seconds", 120)
+        deadline = time.time() + timeout
+        reasons = []
+
+        while time.time() < deadline:
+            try:
+                attrs = conn.getJobAttributes(job_id)
+            except cups.IPPError as e:
+                print(f"Could not query print job {job_id}: {e}")
+                return "Print status unknown"
+
+            state = attrs.get("job-state")
+            reasons = [r for r in attrs.get("job-state-reasons", []) if r != "none"]
+
+            if state == CUPS_JOB_STATE_COMPLETED:
+                return "Printed!"
+            if state in (CUPS_JOB_STATE_CANCELED, CUPS_JOB_STATE_ABORTED):
+                print(f"Print job {job_id} failed: {reasons}")
+                message = attrs.get("job-printer-state-message") or (reasons[0] if reasons else None)
+                return message or "Print failed"
+
+            time.sleep(1)
+
+        print(f"Print job {job_id} still not finished after {timeout}s (last reasons: {reasons})")
+        return "Print taking longer than expected"
+
+    def finish_print(self):
+        self.print_pending = False
+        message = self.print_result
+        self.print_result = None
+        self.print_done.clear()
+        self.show_result(self.status_frame(message), hold_seconds=2)
+        self.show_play_image()
 
     # ------------------------------------------------------------
     # Capture mode <-> Play mode
@@ -425,7 +516,7 @@ class CustardCreamCamera():
 
     def enter_play(self):
         """Always lands on the most recently taken photo - see show_play_image()."""
-        if self.ai_pending or self.publish_pending:
+        if self.ai_pending or self.publish_pending or self.print_pending:
             return
         self.play_page = 0
         self.play_images = sorted(
@@ -474,7 +565,7 @@ class CustardCreamCamera():
 
     def show_play_grid(self):
         """"Page" button - a 3x3 grid to jump further than one image at a time."""
-        if self.ai_pending or self.publish_pending or not self.play_images:
+        if self.ai_pending or self.publish_pending or self.print_pending or not self.play_images:
             return
         self.mode = "play_grid"
         button_y = self.screen.HEIGHT - 50
@@ -539,10 +630,9 @@ class CustardCreamCamera():
             self.show_play_grid()
 
     def play_print(self):
-        if not self.play_images:
+        if not self.play_images or self.print_pending:
             return
         self.print_image(self.play_images[self.play_index])
-        self.show_play_image()
 
     def finish_play_voice_prompt(self):
         if not self.play_images:
@@ -570,7 +660,7 @@ class CustardCreamCamera():
         """"Publish" button in Play mode - choose which configured destination to send this photo
         to. Only one destination is published to per selection; to publish to several, press
         Publish again afterwards and pick another."""
-        if not self.play_images or self.publish_pending:
+        if not self.play_images or self.publish_pending or self.print_pending:
             return
 
         options = available_publishers(self.settings)
@@ -598,7 +688,7 @@ class CustardCreamCamera():
         self.screen.draw(self.play_view)
 
     def start_publish(self, publisher_type):
-        if not self.play_images or self.publish_pending:
+        if not self.play_images or self.publish_pending or self.print_pending:
             return
         self.publish_pending = True
         self.publish_done.clear()
@@ -760,7 +850,7 @@ class CustardCreamCamera():
             time.sleep(0.05)
 
     def start_voice_prompt(self):
-        if self.ai_pending:
+        if self.ai_pending or self.print_pending:
             return
         try:
             self.transcriber.start(on_partial=self._on_voice_partial)
@@ -928,6 +1018,10 @@ class CustardCreamCamera():
             self.finish_publish()
             dirty = True
 
+        if self.print_pending and self.print_done.is_set():
+            self.finish_print()
+            dirty = True
+
         if dirty:
             if self.voice_recording:
                 self.screen.draw(self.status_frame(self.voice_partial_text or "Recording... release to send"))
@@ -935,6 +1029,8 @@ class CustardCreamCamera():
                 self.screen.draw(self.status_frame(self.ai_prompt_text or "Processing..."))
             elif self.publish_pending:
                 self.screen.draw(self.status_frame("Publishing..."))
+            elif self.print_pending:
+                self.screen.draw(self.status_frame("Printing..."))
             elif self.mode in ("play", "play_grid"):
                 self.screen.draw(self.play_view)
             elif self.finder is not None:

@@ -11,7 +11,7 @@ A good way to get cheap hard copy connect a Canon SELPHY CP400 dye-sublimation p
 
 ## Add Your User to the Printer Administration Group
 
-Installations and printer management require membership of the `lpadmin` group.
+Installations and printer management require membership of the `lpadmin` group. This is also needed at runtime: the app clears and re-enables the print queue before every print (see [Recovering From a Stuck Queue](printing.md#recovering-from-a-stuck-queue)), which requires the account running the app to be in this group.
 
 ```bash
 sudo usermod -aG lpadmin $USER

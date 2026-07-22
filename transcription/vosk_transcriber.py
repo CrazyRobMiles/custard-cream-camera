@@ -63,11 +63,28 @@ class VoskTranscriber(BaseTranscriber):
         chunk_size = 4000
         stdout = self.process.stdout
         last_shown = None
+        # Vosk requires whole 16-bit sample frames - a read() landing on a pipe
+        # boundary (e.g. as arecord is killed) can return a partial frame, which
+        # corrupts AcceptWaveform's internal state. Buffer any leftover bytes and
+        # prepend them to the next read so we only ever feed it whole frames.
+        frame_size = 2 * self.channels
+        leftover = b""
         while True:
             data = stdout.read(chunk_size)
             if not data:
                 break
-            if self.recognizer.AcceptWaveform(data):
+            data = leftover + data
+            usable_len = len(data) - (len(data) % frame_size)
+            leftover = data[usable_len:]
+            data = data[:usable_len]
+            if not data:
+                continue
+            try:
+                accepted = self.recognizer.AcceptWaveform(data)
+            except Exception as e:
+                print(f"Speak: Vosk failed to process audio, stopping transcription: {e}")
+                break
+            if accepted:
                 segment = json.loads(self.recognizer.Result()).get("text", "")
                 if segment:
                     self._segments.append(segment)

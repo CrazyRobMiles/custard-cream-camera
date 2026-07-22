@@ -25,8 +25,7 @@ class CustardCreamServerPublisher(BasePublisher):
     button_text = "CC"
 
     def __init__(self, base_url, email_env="CUSTARD_CREAM_SERVER_EMAIL",
-                 password_env="CUSTARD_CREAM_SERVER_PASSWORD", timeout_seconds=15,
-                 qr_hold_seconds=8, tags=""):
+                 password_env="CUSTARD_CREAM_SERVER_PASSWORD", timeout_seconds=15, tags=""):
         if not base_url:
             raise RuntimeError("Custard Cream Server publisher needs a 'base_url' setting")
 
@@ -40,7 +39,6 @@ class CustardCreamServerPublisher(BasePublisher):
             )
 
         self.timeout_seconds = timeout_seconds
-        self.qr_hold_seconds = qr_hold_seconds
         self.tags = tags
         self.last_result = None
 

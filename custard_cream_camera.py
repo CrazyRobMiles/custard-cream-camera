@@ -238,7 +238,6 @@ class CustardCreamCamera():
         # back a {"url", "phrase"} result - lets finish_publish() show a QR code + phrase instead
         # of the plain text banner used for Flickr/Bluesky.
         self.publish_qr_result = None
-        self.publish_qr_hold_seconds = 5
 
         # Bluetooth shutter remote - the physical button sends a real press+release, so the
         # "speak" key drives hold-to-talk the same way the on-screen Speak button does. All the
@@ -618,7 +617,6 @@ class CustardCreamCamera():
                 # Only custard-cream-server sets this - Flickr/Bluesky publishers have no such
                 # attribute, so the plain text banner path below is unaffected for them.
                 self.publish_qr_result = getattr(publisher, "last_result", None)
-                self.publish_qr_hold_seconds = getattr(publisher, "qr_hold_seconds", 2)
         except Exception as e:
             print(f"Publish to {label} failed: {e}")
             self.publish_result = f"{label} publish failed"
@@ -629,17 +627,18 @@ class CustardCreamCamera():
         self.publish_pending = False
         message = self.publish_result
         qr_result = self.publish_qr_result
-        hold_seconds = self.publish_qr_hold_seconds if qr_result else 2
         self.publish_result = None
         self.publish_qr_result = None
         self.publish_done.clear()
 
         if qr_result:
+            # The QR/phrase screen is dismissed by hand (there's no telling how long someone
+            # needs to get their phone out and scan it), unlike the plain text banners below.
             frame = self.qr_result_frame(qr_result["url"], qr_result["phrase"])
+            self.show_result_until_done(frame)
         else:
-            frame = self.status_frame(message)
+            self.show_result(self.status_frame(message), hold_seconds=2)
 
-        self.show_result(frame, hold_seconds=hold_seconds)
         self.show_play_image()
 
     # ------------------------------------------------------------
@@ -742,6 +741,21 @@ class CustardCreamCamera():
         self.screen.draw(img)
         end_time = time.time() + hold_seconds
         while self.running and not self.screen.quit_requested and time.time() < end_time:
+            self.screen.update()
+            time.sleep(0.05)
+
+    def show_result_until_done(self, img):
+        """Like show_result(), but stays up until a "Done" button is pressed instead of a fixed
+        delay - used for the publish QR code/phrase screen, since there's no telling how long
+        someone needs to get their phone out and scan it."""
+        done_pressed = Event()
+        button_y = self.screen.HEIGHT - 50
+        done_button = Button(self.screen.WIDTH - 110, button_y, 110, 50, "Done", self.play_button_font,
+                              (255, 255, 255), (90, 90, 90), None, done_pressed.set)
+
+        self.screen.set_buttons((done_button,))
+        self.screen.draw(img)
+        while self.running and not self.screen.quit_requested and not done_pressed.is_set():
             self.screen.update()
             time.sleep(0.05)
 

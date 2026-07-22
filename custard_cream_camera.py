@@ -453,7 +453,7 @@ class CustardCreamCamera():
         membership (see docs/printer-cups-setup.md).
         """
         try:
-            conn.cancelAllJobs(printer_name, purge_files=True)
+            conn.cancelAllJobs(printer_name, purge_jobs=True)
             conn.enablePrinter(printer_name)
             conn.acceptJobs(printer_name)
         except cups.IPPError as e:

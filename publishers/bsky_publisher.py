@@ -30,7 +30,7 @@ class BskyPublisher(BasePublisher):
         self.text = text
         self.alt_text = alt_text
 
-    def publish(self, image_path, tags=None):
+    def publish(self, image_path, tags=None, ai_instruction=None):
         client = Client()
         client.login(self.handle, self.app_password)
 

@@ -34,7 +34,7 @@ class FlickrPublisher(BasePublisher):
         self.tags = tags
         self.is_public = is_public
 
-    def publish(self, image_path, tags=None):
+    def publish(self, image_path, tags=None, ai_instruction=None):
         if not self.flickr.token_valid(perms="write"):
             raise RuntimeError(
                 "Not authorized with Flickr yet - run `python setup_flickr_auth.py` once from a "

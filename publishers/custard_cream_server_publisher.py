@@ -26,7 +26,7 @@ class CustardCreamServerPublisher(BasePublisher):
 
     def __init__(self, base_url, email_env="CUSTARD_CREAM_SERVER_EMAIL",
                  password_env="CUSTARD_CREAM_SERVER_PASSWORD", timeout_seconds=15,
-                 qr_hold_seconds=8):
+                 qr_hold_seconds=8, tags=""):
         if not base_url:
             raise RuntimeError("Custard Cream Server publisher needs a 'base_url' setting")
 
@@ -41,6 +41,7 @@ class CustardCreamServerPublisher(BasePublisher):
 
         self.timeout_seconds = timeout_seconds
         self.qr_hold_seconds = qr_hold_seconds
+        self.tags = tags
         self.last_result = None
 
     def _login(self):
@@ -57,18 +58,22 @@ class CustardCreamServerPublisher(BasePublisher):
             )
         return response.json()["token"]
 
-    def publish(self, image_path, tags=None):
+    def publish(self, image_path, tags=None, ai_instruction=None):
         self.last_result = None
         token = self._login()
 
         image_path = Path(image_path)
         mime_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+        # Server-side tags are comma-separated (see tagCache.js's splitTags) - unlike Flickr's
+        # space-separated convention, so this can't reuse FlickrPublisher's join.
+        combined_tags = ",".join(t for t in (self.tags, tags) if t)
 
         with open(image_path, "rb") as f:
             response = requests.post(
                 f"{self.base_url}/pictures",
                 headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
                 files={"image": (image_path.name, f, mime_type)},
+                data={"tags": combined_tags, "aiInstruction": ai_instruction or ""},
                 timeout=self.timeout_seconds,
             )
 

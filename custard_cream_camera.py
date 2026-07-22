@@ -196,6 +196,11 @@ class CustardCreamCamera():
         self.play_index = 0
         self.play_page = 0
         self.play_view = None
+        # Maps a saved ai_<timestamp>.jpg Path to the voice instruction that produced it, so
+        # Publish can send it along as the picture's aiInstruction (see finish_ai_edit()/
+        # run_publish()). Only populated for the current session - edits from a previous run
+        # have no entry, which is fine, since the text was never persisted anywhere else either.
+        self.ai_prompts_by_path = {}
 
         # Voice-prompted AI edit ("Speak" button)
         custard_cream_settings = settings.get("custard_cream", {})
@@ -606,7 +611,8 @@ class CustardCreamCamera():
         label = publisher_label(publisher_type)
         try:
             publisher = self.get_publisher(publisher_type)
-            ok = publisher.publish(image_path)
+            ai_instruction = self.ai_prompts_by_path.get(image_path)
+            ok = publisher.publish(image_path, ai_instruction=ai_instruction)
             self.publish_result = f"Published to {label}!" if ok else f"{label} publish failed"
             if ok:
                 # Only custard-cream-server sets this - Flickr/Bluesky publishers have no such
@@ -830,6 +836,7 @@ class CustardCreamCamera():
             out_path = self.save_dir / f"ai_{ts}.jpg"
             out_path.write_bytes(image_bytes)
             self.last_photo_path = out_path
+            self.ai_prompts_by_path[out_path] = prompt_text
             print(f"Saved {out_path} (prompt: {prompt_text!r})")
 
             result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((480, 320))

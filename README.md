@@ -19,7 +19,7 @@ Inspired by the camera made by [Nikbuild](https://github.com/nickbild/banamera)
 * [Exposure Compensation](docs/exposure-compensation.md) — bias the auto-exposure with on-screen EV+/EV- buttons for backlit or overexposed scenes.
 * [Capture Mode and Play Mode](docs/capture-and-play-modes.md) — the live viewfinder vs. reviewing/printing/speaking/publishing existing photos.
 * [Voice-Prompted AI Edits](docs/voice-ai-edits.md) — record a spoken instruction and have Gemini edit the photo.
-* [Bluetooth Shutter Remote](docs/shutter-remote.md) — trigger photos and voice edits from a physical remote instead of the touchscreen.
+* [Shutter Remotes](docs/shutter-remote.md) — trigger photos and voice edits from a Bluetooth or wired USB-serial remote instead of the touchscreen; either or both can be enabled at once.
 * [Audio Output (Shutter Sound)](docs/audio-output.md) — a click sound plays when a photo is taken, configurable and safe to enable even with no audio hardware present.
 
 ## Printing & Publishing

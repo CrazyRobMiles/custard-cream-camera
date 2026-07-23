@@ -40,6 +40,11 @@
         "device_name": "AB Shutter3",
         "grab": true
     },
+    "serial_remote": {
+        "enabled": false,
+        "port": "/dev/ttyUSB0",
+        "baud_rate": 115200
+    },
     "printing": {
         "printer": "SELPHY_CP400",
         "test_mode": false,

@@ -1,4 +1,8 @@
-# Bluetooth Shutter Remote
+# Shutter Remotes
+
+The app supports two independent physical shutter remotes — a Bluetooth one and a wired USB-serial one — each with its own `"enabled"` flag in [settings.json](../settings.json), so either or both can be active at once.
+
+## Bluetooth Shutter Remote
 
 Cheap Bluetooth camera remotes don't have a real "pairing mode" — they just have two buttons/positions (labelled iOS/Android or similar) that each send a different key, since iOS and Android camera apps historically listened for different shortcuts. [shutter_remote.py](../shutter_remote.py) listens for both directly at the input-device level (via `evdev`), independent of which window has focus:
 
@@ -12,7 +16,7 @@ To enable it:
 
 The Volume Up mapping is easy to confirm: pressing the iOS button should show your desktop's volume OSD. The Enter mapping is a best guess for "Android mode" on these remotes — if it doesn't trigger recording, confirm the actual key it sends (see below), and set `"photo_key"`/`"speak_key"` in `settings.json` to match (either can be set to `null` to disable that mapping without disabling the other).
 
-## Automatic device discovery
+### Automatic device discovery
 
 `"device_name"` normally doesn't need to be set at all. `shutter_remote.py` already knows exactly which keys it cares about (`photo_key`/`speak_key`), so with `"device_name": null` it auto-selects any connected input device that reports supporting one of those keys — asking each device "can you send `KEY_VOLUMEUP`/`KEY_ENTER`?" rather than needing to be told a product name up front. This is also what makes `"grab": true` safe by default: it can only ever grab a device that actually reports one of those two keys, never your touchscreen, mouse, or keyboard, since none of those report `KEY_VOLUMEUP`/`KEY_ENTER` as a capability.
 
@@ -40,3 +44,29 @@ If `Paired: yes` but `Connected: no`, and `Trusted: no`, that's very likely the 
 bluetoothctl trust <MAC>
 ```
 which should make it reconnect immediately and keep auto-reconnecting from then on.
+
+## Wired (USB Serial) Shutter Remote
+
+For a simple homemade remote connected over USB serial and sending the word `click` (newline-terminated) each time its button is pressed. Implemented in [serial_shutter_remote.py](../serial_shutter_remote.py), it's much simpler than the Bluetooth remote above: one button, one action - it always takes a photo (the same event as the Bluetooth remote's `photo_key`), the same as pressing **Click** in Capture mode or, if you're currently in Play mode, switching back to Capture mode without taking a photo. It doesn't have a Speak/hold-to-talk equivalent.
+
+To enable it:
+
+1. Plug the remote in and find its device path: `ls /dev/ttyUSB* /dev/ttyACM*` (USB-serial adapters usually show up as one or the other, depending on the chip they use).
+2. Set `"serial_remote"` in [settings.json](../settings.json):
+   ```json
+   "serial_remote": {
+       "enabled": true,
+       "port": "/dev/ttyUSB0",
+       "baud_rate": 9600
+   }
+   ```
+   `"baud_rate"` must match whatever the remote's firmware is actually configured to send at - 9600 is a common default, but check your specific device.
+3. Make sure your user can access serial ports: `sudo usermod -aG dialout $USER`, then log out and back in (or reboot) for group membership to take effect.
+
+This remote and the Bluetooth one are fully independent - both can be `"enabled": true` at once, each triggering the same photo action.
+
+**Not being detected / nothing happens on click?** Like the Bluetooth remote, `serial_shutter_remote.py` retries opening the port every second if it's missing (unplugged, not yet enumerated at boot), so it should pick the remote up within a second or two of being plugged in - check the console/log for a `SerialShutterRemote: listening on ...` line to confirm it connected. If it connects but clicks don't register, confirm what the remote is actually sending, e.g.:
+```bash
+screen /dev/ttyUSB0 9600
+```
+(press the remote's button and confirm you see `click` printed; `Ctrl-A` `k` `y` to exit `screen`) - a mismatched baud rate typically shows up as garbled text rather than silence.

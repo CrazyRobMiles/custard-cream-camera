@@ -12,3 +12,4 @@ atproto
 requests
 qrcode
 pycups
+pyserial

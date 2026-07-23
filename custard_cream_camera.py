@@ -21,6 +21,7 @@ from displays import Button, create_display
 from NanoBananaClient import CustardCreamClient
 from print_overlays import apply_datestamp, apply_watermark
 from publishers import available_publishers, create_publisher, publisher_label
+from serial_shutter_remote import SerialShutterRemote
 from shutter_remote import ShutterRemote
 from transcription import create_transcriber
 
@@ -255,11 +256,14 @@ class CustardCreamCamera():
         # of the plain text banner used for Flickr/Bluesky.
         self.publish_qr_result = None
 
-        # Bluetooth shutter remote - the physical button sends a real press+release, so the
-        # "speak" key drives hold-to-talk the same way the on-screen Speak button does. All the
-        # Events below are set from the remote's background listener thread and only ever acted
-        # on in process_frame(), on the main thread, since drawing/Picamera2 calls aren't safe
-        # to make from a background thread.
+        # Shutter remotes - Bluetooth and/or wired USB-serial, either or both can be enabled at
+        # once (see settings.json's "shutter_remote"/"serial_remote" blocks). The Bluetooth
+        # remote's physical button sends a real press+release, so its "speak" key drives
+        # hold-to-talk the same way the on-screen Speak button does; the wired remote only ever
+        # sends a single-shot "click", so it's wired to remote_photo_requested only, the same
+        # event the Bluetooth remote's photo_key sets. All the Events below are set from a
+        # remote's background listener thread and only ever acted on in process_frame(), on the
+        # main thread, since drawing/Picamera2 calls aren't safe to make from a background thread.
         remote_settings = settings.get("shutter_remote", {})
         self.remote_photo_requested = Event()
         self.remote_speak_down = Event()
@@ -280,6 +284,16 @@ class CustardCreamCamera():
                 grab=remote_settings.get("grab", False),
             )
             self.shutter_remote.start()
+
+        serial_remote_settings = settings.get("serial_remote", {})
+        self.serial_remote = None
+        if serial_remote_settings.get("enabled", False):
+            self.serial_remote = SerialShutterRemote(
+                port=serial_remote_settings.get("port", "/dev/ttyUSB0"),
+                on_click=self.remote_photo_requested.set,
+                baud_rate=serial_remote_settings.get("baud_rate", 9600),
+            )
+            self.serial_remote.start()
 
     def adjust_exposure(self, delta):
         new_value = round(min(self.ev_max, max(self.ev_min, self.exposure_value + delta)), 2)
@@ -1064,6 +1078,8 @@ class CustardCreamCamera():
             print("System stopping: tidying up")
             if self.shutter_remote is not None:
                 self.shutter_remote.stop()
+            if self.serial_remote is not None:
+                self.serial_remote.stop()
             self.screen.close()
             self.kbd.close()
             self.picam2.stop()

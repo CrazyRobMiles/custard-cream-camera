@@ -33,6 +33,11 @@ CUPS_JOB_STATE_CANCELED = 7
 CUPS_JOB_STATE_ABORTED = 8
 CUPS_JOB_STATE_COMPLETED = 9
 
+# How often wait_for_print_job() refreshes the on-screen status from `lpstat -t` while a print
+# is in flight - frequent enough to catch a paper-out/jam message promptly, without spawning a
+# subprocess on every 1s job-state poll.
+LPSTAT_POLL_SECONDS = 5
+
 
 def load_settings():
     with open(SETTINGS_PATH) as f:
@@ -193,6 +198,12 @@ class CustardCreamCamera():
         self.print_pending = False
         self.print_done = Event()
         self.print_result = None
+        # Set periodically by wait_for_print_job() from `lpstat -t` output while a print is in
+        # flight, so the on-screen "Printing..." banner can show real diagnostic text (paper
+        # out, offline, etc.) instead of a static placeholder - print_status_ready forces a
+        # redraw the same way ai_prompt_ready does for the AI edit prompt.
+        self.print_status_text = None
+        self.print_status_ready = Event()
 
         self.watermark_settings = settings.get("watermark", {})
         self.datestamp_settings = settings.get("datestamp", {})
@@ -429,6 +440,8 @@ class CustardCreamCamera():
         self.print_pending = True
         self.print_done.clear()
         self.print_result = None
+        self.print_status_text = None
+        self.print_status_ready.clear()
         Thread(target=self.run_print, args=(print_path,), daemon=True).start()
 
     def run_print(self, print_path):
@@ -447,7 +460,7 @@ class CustardCreamCamera():
 
             self.reset_printer_queue(conn, printer_name)
             job_id = conn.printFile(printer_name, str(print_path), "Custard Cream Camera", {})
-            self.print_result = self.wait_for_print_job(conn, job_id)
+            self.print_result = self.wait_for_print_job(conn, job_id, printer_name)
         except Exception as e:
             print(f"Print failed: {e}")
             self.print_result = "Print failed"
@@ -473,17 +486,23 @@ class CustardCreamCamera():
         except cups.IPPError as e:
             print(f"Could not reset printer queue for {printer_name!r}: {e}")
 
-    def wait_for_print_job(self, conn, job_id):
+    def wait_for_print_job(self, conn, job_id, printer_name):
         """Polls a submitted job until CUPS reports it finished, one way or another, or a
         timeout elapses. printFile() only confirms the job was queued - without this, a print
         that fails downstream (out of paper, a jam) would look identical to one that actually
-        came out.
+        came out. Also refreshes the on-screen status from `lpstat -t` every
+        LPSTAT_POLL_SECONDS - see update_print_status_text().
         """
         timeout = self.printing_settings.get("job_timeout_seconds", 120)
         deadline = time.time() + timeout
         reasons = []
+        next_lpstat_poll = time.time()  # poll immediately on the first pass, then periodically
 
         while time.time() < deadline:
+            if time.time() >= next_lpstat_poll:
+                self.update_print_status_text(printer_name)
+                next_lpstat_poll = time.time() + LPSTAT_POLL_SECONDS
+
             try:
                 attrs = conn.getJobAttributes(job_id)
             except cups.IPPError as e:
@@ -504,6 +523,48 @@ class CustardCreamCamera():
 
         print(f"Print job {job_id} still not finished after {timeout}s (last reasons: {reasons})")
         return "Print taking longer than expected"
+
+    def update_print_status_text(self, printer_name):
+        """Refreshes print_status_text from `lpstat -t` if it's changed, and signals
+        print_status_ready so process_frame() redraws the "Printing..." banner with it -
+        mirrors how ai_prompt_ready forces a redraw when the AI edit prompt text arrives.
+        """
+        text = self.poll_lpstat(printer_name)
+        if text and text != self.print_status_text:
+            self.print_status_text = text
+            self.print_status_ready.set()
+
+    def poll_lpstat(self, printer_name):
+        """Runs `lpstat -t` and returns this printer's own diagnostic detail line, if it has
+        one right now - pycups (the structured CUPS API binding used everywhere else in this
+        file) doesn't expose the CLI's free-text status reporting, and that line is exactly
+        what's useful for diagnosing a stuck print (paper out, printer offline, a jam) at a
+        glance: an indented line following the printer's summary line (e.g. gutenprint's
+        "Sending CYAN plane" while printing, or "No paper tray loaded, aborting!" when it
+        fails). Everything else `-t` reports (the summary line itself, "device for ..."/
+        "accepting requests since ..." lines, the raw job listing) is either boilerplate that
+        doesn't change over the course of a print, or duplicates what run_print()/
+        wait_for_print_job() already track - so none of that is returned.
+        """
+        try:
+            result = subprocess.run(["lpstat", "-t"], capture_output=True, text=True, timeout=5)
+        except (subprocess.SubprocessError, OSError) as e:
+            print(f"Could not run lpstat: {e}")
+            return None
+
+        prefix = f"printer {printer_name} "
+        detail_lines = []
+        capture_continuation = False
+        for line in result.stdout.splitlines():
+            if line.startswith(prefix):
+                detail_lines = []
+                capture_continuation = True
+            elif capture_continuation and line[:1].isspace():
+                detail_lines.append(line.strip())
+            else:
+                capture_continuation = False
+
+        return " ".join(detail_lines) if detail_lines else None
 
     def finish_print(self):
         self.print_pending = False
@@ -780,11 +841,15 @@ class CustardCreamCamera():
         draw.text((frame.width // 2, 20), "  ".join(parts), font=self.small_font, fill=(255, 255, 0), anchor="mm")
         return frame
 
-    def status_frame(self, text):
+    def status_frame(self, text, font=None):
         """A short status banner over the current backdrop. Word-wraps to as many lines as
         needed - most callers pass a short fixed string that always fits on one line (unchanged
-        from before), but a transcribed voice prompt can run to a full sentence.
+        from before), but a transcribed voice prompt (or an lpstat diagnostic line) can run to a
+        full sentence, hence the wrapping and the font override: medium_font (the default) is
+        sized for a couple of short words, not a whole sentence.
         """
+        font = font or self.medium_font
+
         if self.mode in ("play", "play_grid") and self.play_view is not None:
             base = self.play_view
         elif self.finder is not None:
@@ -800,7 +865,7 @@ class CustardCreamCamera():
         current = ""
         for word in words:
             candidate = f"{current} {word}".strip()
-            if draw.textlength(candidate, font=self.medium_font) <= max_width:
+            if draw.textlength(candidate, font=font) <= max_width:
                 current = candidate
             else:
                 if current:
@@ -811,13 +876,15 @@ class CustardCreamCamera():
         if not lines:
             lines = [text]
 
-        line_height = 40
+        # Matches medium_font's own 32px-font/40px-line ratio, so existing callers (which all
+        # use the default font) render exactly as before.
+        line_height = round(font.size * 1.25)
         block_height = line_height * len(lines) + 10
         top = frame.height // 2 - block_height // 2
         draw.rectangle((0, top, frame.width, top + block_height), fill=(0, 0, 0))
         for i, line in enumerate(lines):
             y = top + 10 + i * line_height + line_height // 2
-            draw.text((frame.width // 2, y), line, font=self.medium_font, fill=(255, 255, 255), anchor="mm")
+            draw.text((frame.width // 2, y), line, font=font, fill=(255, 255, 255), anchor="mm")
         return frame
 
     def qr_result_frame(self, url, phrase):
@@ -1024,6 +1091,10 @@ class CustardCreamCamera():
             self.ai_prompt_ready.clear()
             dirty = True
 
+        if self.print_status_ready.is_set():
+            self.print_status_ready.clear()
+            dirty = True
+
         if self.ai_pending and self.ai_done.is_set():
             self.finish_ai_edit()
             dirty = True
@@ -1044,7 +1115,13 @@ class CustardCreamCamera():
             elif self.publish_pending:
                 self.screen.draw(self.status_frame("Publishing..."))
             elif self.print_pending:
-                self.screen.draw(self.status_frame("Printing..."))
+                if self.print_status_text:
+                    # small_font: an lpstat detail line ("Sending CYAN plane", "No paper tray
+                    # loaded, aborting!") runs longer than the couple of words medium_font (the
+                    # default) is sized for.
+                    self.screen.draw(self.status_frame(self.print_status_text, font=self.small_font))
+                else:
+                    self.screen.draw(self.status_frame("Printing..."))
             elif self.mode in ("play", "play_grid"):
                 self.screen.draw(self.play_view)
             elif self.finder is not None:

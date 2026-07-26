@@ -1,9 +1,8 @@
 # Display Backends
 
-`custard_cream_camera.py` renders through a pluggable display layer in [displays/](../displays/). Three backends are provided:
+`custard_cream_camera.py` renders through a pluggable display layer in [displays/](../displays/). Two backends are provided, both for devices with a native HDMI display — a SPI panel backend (`ili9486`) used to be supported but was dropped: its framerate was too low to manually focus the camera image, making it non-viable as a platform regardless of anything else:
 
-* `ili9486` — the SPI ILI9486 LCD + XPT2046 touch panel ([displays/ili9486_display.py](../displays/ili9486_display.py))
-* `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([displays/hdmi_desktop_display.py](../displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app. This is the simplest option and the one to try first on a device with a native HDMI display.
+* `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([displays/hdmi_desktop_display.py](../displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app. This is the simplest option and the one to try first.
 * `hdmi-pygame` — a dedicated fullscreen SDL/pygame surface, using the mouse for touch input ([displays/hdmi_pygame_display.py](../displays/hdmi_pygame_display.py)). Bypasses the desktop's window manager for lower-overhead fullscreen updates, at the cost of needing a working SDL video driver for your setup — reach for this only if `hdmi-desktop`'s performance isn't enough.
 
 Select the backend and tune its options in [settings.json](../settings.json):
@@ -11,16 +10,24 @@ Select the backend and tune its options in [settings.json](../settings.json):
 ```json
 {
     "display": {
-        "type": "ili9486"
+        "type": "hdmi-desktop",
+        "width": 800,
+        "height": 480
     }
 }
 ```
 
-Set `"type"` to `"hdmi-desktop"` or `"hdmi-pygame"` to run on a device with a native HDMI display instead. `hdmi-desktop` needs Tkinter, which on Raspberry Pi OS / Debian is a system package, not a pip one:
+`hdmi-desktop` needs Tkinter, which on Raspberry Pi OS / Debian is a system package, not a pip one:
 
 ```bash
 sudo apt install python3-tk
 ```
+
+## `width`/`height` — the logical canvas size
+
+Every screen (menus, the viewfinder, the on-screen keyboard) is drawn against a logical canvas of `width` x `height`, then scaled up to fill whatever the real window/output size is — so this is independent of `hdmi-pygame`'s own `window_width`/`window_height` (the *physical* SDL surface size). Defaults to `480`x`320` if omitted, matching the size this app originally shipped with.
+
+A bigger canvas gives more room for on-screen text and controls (e.g. the AI-prompt keyboard, see [Voice-Prompted AI Edits](voice-ai-edits.md)) at the cost of more pixels to draw per frame. If a larger size (e.g. `800`x`480`, or whatever a bigger panel needs) causes worse frame rates on your hardware, drop `width`/`height` back down (or remove them entirely to fall back to `480`x`320`) — no code change needed either way. Every layout in the app computes itself from these values at runtime rather than assuming a fixed size, so any resolution should work.
 
 ## `DISPLAY`/`XDG_RUNTIME_DIR` not set
 

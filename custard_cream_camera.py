@@ -90,8 +90,8 @@ class CustardCreamCamera():
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 48
         )
 
-        # The Play menu's four narrow (110px) buttons need a smaller legend than the
-        # wider buttons that also use medium_font - this doesn't affect them.
+        # The Play menu's four-across row (and other narrow multi-button rows) need a smaller
+        # legend than the wider buttons that also use medium_font - this doesn't affect them.
         self.play_button_font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26
         )
@@ -100,6 +100,11 @@ class CustardCreamCamera():
         )
 
         self.picam2 = Picamera2()
+
+        # Created before the preview config below, since the preview capture size follows
+        # self.screen.WIDTH/HEIGHT (the logical canvas size, configurable via settings["display"]
+        # - see displays/__init__.py) rather than a hardcoded resolution.
+        self.screen = create_display(settings)
 
         # Corrects for the sensor being mounted rotated 180 degrees in this build - flip both
         # axes rather than rotating every captured frame in software afterward.
@@ -110,7 +115,7 @@ class CustardCreamCamera():
         )
 
         self.preview_config = self.picam2.create_preview_configuration(
-            main={"size": (480, 320), "format": "BGR888"},
+            main={"size": (self.screen.WIDTH, self.screen.HEIGHT), "format": "BGR888"},
             transform=camera_transform,
         )
 
@@ -149,33 +154,36 @@ class CustardCreamCamera():
 
         self.kbd = Keyboard()
 
-        self.screen = create_display(settings)
-
         button_y = self.screen.HEIGHT - 50
 
         # Capture mode: live viewfinder, take a photo or switch to Play mode to review/act on
         # existing ones. There's no on-screen quit button any more - use keyboard 'q', or
         # Escape/window-close on the HDMI backends.
         self.capture_menu = (
-            Button(0, button_y, 230, 50, "Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
-            Button(250, button_y, 230, 50, "Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
+            *self._row_of_buttons(button_y, 50, (
+                ("Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
+                ("Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
+            )),
             # Exposure compensation - tucked into the top corners since the bottom row is full.
             Button(0, 0, 50, 40, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
-            Button(430, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
+            Button(self.screen.WIDTH - 50, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
         )
 
         # Play mode: reviews/acts on captures/ directly - Print/Speak/Publish always target
         # whatever's currently selected (self.play_index), no separate "choose, then act" step.
         # Left/Right step through images one at a time; Page opens a 3x3 grid to jump further.
+        arrow_y = 40 + (self.screen.HEIGHT - 40 - 50 - 100) // 2
         self.play_menu = (
-            Button(0, button_y, 110, 50, "Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
-            Button(123, button_y, 110, 50, "Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
-            Button(246, button_y, 110, 50, "Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), up_handler=self.finish_play_voice_prompt, down_handler=self.start_voice_prompt),
-            Button(369, button_y, 110, 50, "Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
+            *self._row_of_buttons(button_y, 50, (
+                ("Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
+                ("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
+                ("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt),
+                ("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
+            )),
             Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
-            Button(430, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
-            Button(0, 110, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
-            Button(448, 110, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
+            Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
+            Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
+            Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
         )
 
         self.screen.set_buttons(self.capture_menu)
@@ -201,7 +209,7 @@ class CustardCreamCamera():
         # Set periodically by wait_for_print_job() from `lpstat -t` output while a print is in
         # flight, so the on-screen "Printing..." banner can show real diagnostic text (paper
         # out, offline, etc.) instead of a static placeholder - print_status_ready forces a
-        # redraw the same way ai_prompt_ready does for the AI edit prompt.
+        # redraw the same way ai_status_ready does for the AI edit progress text.
         self.print_status_text = None
         self.print_status_ready = Event()
 
@@ -238,12 +246,19 @@ class CustardCreamCamera():
         self.ai_pending = False
         self.ai_done = Event()
         self.ai_result = None
-        # Set by run_ai_edit() as soon as transcription comes back, so the "Processing..." status
-        # can switch to showing the actual prompt while the (usually much slower) image edit
-        # call is still in flight - ai_prompt_ready just forces a redraw at that moment, since
-        # dirty otherwise only becomes true on user input or when the whole edit finishes.
-        self.ai_prompt_text = None
-        self.ai_prompt_ready = Event()
+        # The still image being edited - set once by finish_voice_prompt(), read by both the
+        # transcribe and edit phases below.
+        self.ai_still_path = None
+        # Result of the transcribe-only phase (run_transcribe()) - process_frame() picks this up
+        # and runs the confirm/edit review (review_ai_prompt()) on the main thread once it's set.
+        self.ai_transcript = None
+        self.ai_transcribe_done = Event()
+        # Set by run_transcribe()/run_ai_edit() as each stage starts/finishes, so the on-screen
+        # banner can show real progress ("Transcribing...", "Sending image for processing...",
+        # "Received result, saving...") instead of a static placeholder - ai_status_ready forces
+        # a redraw the same way print_status_ready does for the print diagnostics.
+        self.ai_status_text = None
+        self.ai_status_ready = Event()
         # Set while the Speak button is held. voice_partial_text is updated live by
         # streaming transcribers (e.g. Vosk) via _on_voice_partial(); batch transcribers
         # (e.g. Gemini) never update it, leaving the static "Recording..." banner shown.
@@ -527,7 +542,7 @@ class CustardCreamCamera():
     def update_print_status_text(self, printer_name):
         """Refreshes print_status_text from `lpstat -t` if it's changed, and signals
         print_status_ready so process_frame() redraws the "Printing..." banner with it -
-        mirrors how ai_prompt_ready forces a redraw when the AI edit prompt text arrives.
+        mirrors how ai_status_ready forces a redraw when the AI edit progress text changes.
         """
         text = self.poll_lpstat(printer_name)
         if text and text != self.print_status_text:
@@ -610,7 +625,7 @@ class CustardCreamCamera():
 
         if not self.play_images:
             self.screen.set_buttons((
-                Button(0, button_y, 480, 50, "Capture", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
+                Button(0, button_y, self.screen.WIDTH, 50, "Capture", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
             ))
             self.play_view = self.status_frame("No photos yet")
             self.screen.draw(self.play_view)
@@ -681,11 +696,11 @@ class CustardCreamCamera():
 
         self.play_view = canvas
 
-        nav_buttons = (
-            Button(0, button_y, 150, 50, "Left", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_prev_page),
-            Button(165, button_y, 150, 50, "Right", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_next_page),
-            Button(330, button_y, 150, 50, "Back", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image),
-        )
+        nav_buttons = self._row_of_buttons(button_y, 50, (
+            ("Left", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_prev_page),
+            ("Right", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_next_page),
+            ("Back", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image),
+        ))
         self.screen.set_buttons((*nav_buttons, *thumb_buttons))
         self.screen.draw(self.play_view)
 
@@ -750,16 +765,15 @@ class CustardCreamCamera():
             return
 
         button_y = self.screen.HEIGHT - 50
-        buttons = [
-            Button(i * 123, button_y, 110, 50, label, self.play_button_font, (255, 255, 255),
-                   self.PUBLISH_MENU_COLOURS.get(publisher_type, (90, 90, 90)), None,
-                   lambda publisher_type=publisher_type: self.start_publish(publisher_type))
-            for i, (publisher_type, label) in enumerate(options)
+        specs = [
+            (label, self.play_button_font, (255, 255, 255),
+             self.PUBLISH_MENU_COLOURS.get(publisher_type, (90, 90, 90)), None,
+             lambda publisher_type=publisher_type: self.start_publish(publisher_type))
+            for publisher_type, label in options
         ]
-        buttons.append(Button(len(options) * 123, button_y, 110, 50, "Back", self.play_button_font,
-                               (255, 255, 255), (90, 90, 90), None, self.show_play_image))
+        specs.append(("Back", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image))
 
-        self.screen.set_buttons(tuple(buttons))
+        self.screen.set_buttons(self._row_of_buttons(button_y, 50, specs))
         self.screen.draw(self.play_view)
 
     def start_publish(self, publisher_type):
@@ -841,6 +855,23 @@ class CustardCreamCamera():
         draw.text((frame.width // 2, 20), "  ".join(parts), font=self.small_font, fill=(255, 255, 0), anchor="mm")
         return frame
 
+    def _row_of_buttons(self, y, height, specs, gap=10):
+        """Lays out specs - each (text, font, text_colour, back_colour, up_handler,
+        down_handler) - as equal-width buttons spanning the full canvas width. Used for every
+        menu that's a single row of buttons filling the screen (capture/play menus, grid nav,
+        publish picker, the AI confirm/keyboard screens), so they keep filling the screen
+        edge-to-edge at whatever display.width is configured, not just the 480px this app
+        originally shipped with.
+        """
+        n = len(specs)
+        button_width = (self.screen.WIDTH - gap * (n - 1)) // n
+        buttons = []
+        x = 0
+        for text, font, text_colour, back_colour, up_handler, down_handler in specs:
+            buttons.append(Button(x, y, button_width, height, text, font, text_colour, back_colour, up_handler, down_handler))
+            x += button_width + gap
+        return tuple(buttons)
+
     def status_frame(self, text, font=None):
         """A short status banner over the current backdrop. Word-wraps to as many lines as
         needed - most callers pass a short fixed string that always fits on one line (unchanged
@@ -855,7 +886,7 @@ class CustardCreamCamera():
         elif self.finder is not None:
             base = self.finder
         else:
-            base = Image.new("RGB", (480, 320), (0, 0, 0))
+            base = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (0, 0, 0))
         frame = base.copy()
         draw = ImageDraw.Draw(frame)
 
@@ -892,7 +923,7 @@ class CustardCreamCamera():
         picture's page, plus the three-word phrase as a human-readable fallback for anyone who
         can't scan it.
         """
-        frame = Image.new("RGB", (480, 320), (0, 0, 0))
+        frame = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (0, 0, 0))
         draw = ImageDraw.Draw(frame)
 
         qr_size = 200
@@ -975,25 +1006,259 @@ class CustardCreamCamera():
             print(f"Speak: using existing photo {still_path}")
 
         self.ai_pending = True
-        self.ai_prompt_text = None
-        self.ai_done.clear()
-        Thread(target=self.run_ai_edit, args=(still_path,), daemon=True).start()
+        self.ai_still_path = still_path
+        self.ai_transcript = None
+        self.ai_transcribe_done.clear()
+        self.ai_status_text = None
+        self.ai_status_ready.clear()
+        Thread(target=self.run_transcribe, daemon=True).start()
 
-    def run_ai_edit(self, still_path):
-        """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on the network."""
+    def run_transcribe(self):
+        """Runs on a background thread: the transcription-only phase (network call for the
+        Gemini backend, local/instant for Vosk). Split out from image editing so the result can
+        be reviewed - accepted, rejected, or edited - before anything is sent to Gemini for the
+        actual image edit.
+        """
         try:
-            prompt_text = self.transcriber.finalize()
-            if not prompt_text:
-                self.ai_result = ("status", "Didn't catch that")
+            self.ai_status_text = "Transcribing..."
+            self.ai_status_ready.set()
+            self.ai_transcript = self.transcriber.finalize()
+        except Exception as e:
+            print(f"Speak: transcription failed: {e}")
+            self.ai_transcript = None
+        finally:
+            self.ai_transcribe_done.set()
+
+    def review_ai_prompt(self):
+        """Runs on the main thread once run_transcribe() finishes (called from process_frame()).
+        Shows the transcribed prompt and lets the user Send/Reject/Edit it before anything is
+        sent to Gemini for the image edit - blocks the main loop while doing so, the same way
+        show_result_until_done() already does for the publish QR screen.
+        """
+        text = self.ai_transcript
+        self.ai_transcript = None
+        self.ai_transcribe_done.clear()
+        came_from_play = self.mode == "play"
+
+        if not text:
+            print("Speak: didn't catch that")
+            self.ai_pending = False
+            self.show_result(self.status_frame("Didn't catch that"), hold_seconds=2)
+            if came_from_play:
+                self.show_play_image()
+            return
+
+        while True:
+            choice = self.show_ai_confirm_screen(text)
+            if choice == "edit":
+                text = self.show_ai_edit_screen(text)
+                continue
+            break
+
+        # The confirm/edit screens took over screen.set_buttons() for their own controls -
+        # restore whichever menu was active before Speak was pressed, same as the rest of this
+        # flow (print/publish/the original combined AI edit) leaves untouched during their
+        # own "processing" banners rather than clearing it.
+        self.screen.set_buttons(self.play_menu if came_from_play else self.capture_menu)
+
+        if choice == "reject":
+            print("Speak: prompt rejected, not sent")
+            self.ai_pending = False
+            if came_from_play:
+                self.show_play_image()
+            return
+
+        self.ai_result = None
+        self.ai_done.clear()
+        self.ai_status_text = None
+        self.ai_status_ready.clear()
+        Thread(target=self.run_ai_edit, args=(self.ai_still_path, text), daemon=True).start()
+
+    def show_ai_confirm_screen(self, text):
+        """Blocks (same idiom as show_result_until_done(): redraw only when a button fires) until
+        the user picks what to do with the transcribed prompt. Returns "send", "reject", or
+        "edit" - never sends anything to Gemini itself, that's run_ai_edit()'s job.
+        """
+        choice = {"value": None}
+
+        def pick(value):
+            choice["value"] = value
+
+        buttons = self._row_of_buttons(self.screen.HEIGHT - 50, 50, (
+            ("Reject", self.play_button_font, (255, 255, 255), (150, 30, 30), None, lambda: pick("reject")),
+            ("Edit", self.play_button_font, (255, 255, 255), (90, 90, 90), None, lambda: pick("edit")),
+            ("Send", self.play_button_font, (255, 255, 255), (0, 110, 0), None, lambda: pick("send")),
+        ))
+        self.screen.set_buttons(buttons)
+        self.screen.draw(self.status_frame(text))
+        while self.running and not self.screen.quit_requested and choice["value"] is None:
+            self.screen.update()
+            time.sleep(0.05)
+        return choice["value"] or "reject"
+
+    def show_ai_edit_screen(self, initial_text):
+        """On-screen keyboard for correcting a misheard prompt before it's sent - built entirely
+        from Button/ButtonPanel, no new display-backend code. Cancel returns initial_text
+        unchanged; Done returns whatever's in the buffer at that point. Editing is append/
+        backspace/cursor-move at a single cursor position (no shift/caps, no newline key) -
+        prompts are natural-language Gemini instructions, not code, so this covers the need
+        without a full mobile-keyboard's scope.
+        """
+        state = {"text": initial_text, "cursor": len(initial_text), "done": None}
+
+        def insert(ch):
+            text, cursor = state["text"], state["cursor"]
+            state["text"] = text[:cursor] + ch + text[cursor:]
+            state["cursor"] = cursor + len(ch)
+
+        def backspace():
+            text, cursor = state["text"], state["cursor"]
+            if cursor > 0:
+                state["text"] = text[:cursor - 1] + text[cursor:]
+                state["cursor"] = cursor - 1
+
+        def move_cursor(delta):
+            state["cursor"] = max(0, min(len(state["text"]), state["cursor"] + delta))
+
+        def clear_text():
+            state["text"] = ""
+            state["cursor"] = 0
+
+        def finish(value):
+            state["done"] = value
+
+        unit = self.screen.WIDTH / 10
+        key_row_height = 50
+        keys_top = self.screen.HEIGHT - 50 - 4 * key_row_height
+
+        def key_row(row_index, specs):
+            """specs: list of (label, units, handler). Lays keys out left-to-right on the
+            unit grid, at the given row within the 4-row key area."""
+            y = keys_top + row_index * key_row_height
+            buttons = []
+            x = 0.0
+            for label, units, handler in specs:
+                width = round(units * unit)
+                buttons.append(Button(round(x), y, width, key_row_height, label, self.medium_font,
+                                       (255, 255, 255), (60, 60, 60), None, handler))
+                x += units * unit
+            return buttons
+
+        letter_keys = []
+        for ch in "qwertyuiop":
+            letter_keys.append((ch, 1, lambda ch=ch: insert(ch)))
+        row1 = key_row(0, letter_keys)
+
+        letter_keys = [(ch, 1, lambda ch=ch: insert(ch)) for ch in "asdfghjkl"]
+        letter_keys.append(("Del", 1, backspace))
+        row2 = key_row(1, letter_keys)
+
+        letter_keys = [(ch, 1, lambda ch=ch: insert(ch)) for ch in "zxcvbnm"]
+        letter_keys.append(("<", 1.5, lambda: move_cursor(-1)))
+        letter_keys.append((">", 1.5, lambda: move_cursor(1)))
+        row3 = key_row(2, letter_keys)
+
+        row4 = key_row(3, [
+            ("Space", 6, lambda: insert(" ")),
+            (".", 1, lambda: insert(".")),
+            (",", 1, lambda: insert(",")),
+            ("'", 1, lambda: insert("'")),
+            ("?", 1, lambda: insert("?")),
+        ])
+
+        action_buttons = self._row_of_buttons(self.screen.HEIGHT - 50, 50, (
+            ("Cancel", self.play_button_font, (255, 255, 255), (150, 30, 30), None, lambda: finish(initial_text)),
+            ("Clear", self.play_button_font, (255, 255, 255), (90, 90, 90), None, clear_text),
+            ("Done", self.play_button_font, (255, 255, 255), (0, 110, 0), None, lambda: finish(state["text"])),
+        ))
+
+        self.screen.set_buttons((*row1, *row2, *row3, *row4, *action_buttons))
+
+        text_area = (0, 0, self.screen.WIDTH, keys_top)
+        self.screen.draw(self._render_prompt_editor(state["text"], state["cursor"], text_area))
+        while self.running and not self.screen.quit_requested and state["done"] is None:
+            if self.screen.update():
+                self.screen.draw(self._render_prompt_editor(state["text"], state["cursor"], text_area))
+            time.sleep(0.02)
+        return state["done"] if state["done"] is not None else initial_text
+
+    def _render_prompt_editor(self, text, cursor, area):
+        """Draws `text` word-wrapped and left-aligned into `area` = (x, y, width, height), with a
+        vertical bar marking `cursor`'s position, scrolling to keep the cursor's line visible if
+        the wrapped text is taller than the area. A dedicated renderer rather than a status_frame()
+        reuse: status_frame() is a centered read-only banner, and this needs left-aligned wrapping
+        plus a cursor and scrolling, which don't fit that shape.
+        """
+        x, y, width, height = area
+        frame = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (0, 0, 0))
+        draw = ImageDraw.Draw(frame)
+        font = self.small_font
+
+        max_width = width - 20
+        words = text.split(" ")
+        lines = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}" if current else word
+            if draw.textlength(candidate, font=font) <= max_width or not current:
+                current = candidate
             else:
-                self.ai_prompt_text = prompt_text
-                self.ai_prompt_ready.set()
-                client = self.get_custard_cream_client()
-                edited_bytes = client.edit_image(still_path.read_bytes(), prompt_text)
-                if edited_bytes is None:
-                    self.ai_result = ("status", "No image returned")
-                else:
-                    self.ai_result = ("image", edited_bytes, prompt_text)
+                lines.append(current)
+                current = word
+        lines.append(current)
+
+        # Recover each line's (start, end) offset into the original text, so the line containing
+        # `cursor` - and the pixel x-offset within it - can be found. Safe to locate lines via
+        # sequential text.index() here since Space always inserts single ASCII spaces, so
+        # rejoining words with single spaces reproduces the original spacing exactly.
+        spans = []
+        search_from = 0
+        for line in lines:
+            start = text.index(line, search_from)
+            end = start + len(line)
+            spans.append((start, end))
+            search_from = end
+
+        cursor_line = 0
+        for i, (start, end) in enumerate(spans):
+            if start <= cursor <= end:
+                cursor_line = i
+                break
+            cursor_line = i
+
+        line_height = round(font.size * 1.3)
+        max_visible = max(1, height // line_height)
+        window_start = max(0, min(cursor_line - max_visible // 2, len(lines) - max_visible))
+        visible_lines = lines[window_start:window_start + max_visible]
+
+        for i, line in enumerate(visible_lines):
+            line_y = y + 10 + i * line_height
+            draw.text((x + 10, line_y), line, font=font, fill=(255, 255, 255))
+
+            line_index = window_start + i
+            if line_index == cursor_line:
+                start, _ = spans[line_index]
+                prefix = text[start:cursor]
+                cursor_x = x + 10 + draw.textlength(prefix, font=font)
+                draw.line((cursor_x, line_y, cursor_x, line_y + line_height - 2), fill=(255, 255, 0), width=2)
+
+        return frame
+
+    def run_ai_edit(self, still_path, prompt_text):
+        """Runs on a background thread so the viewfinder/buttons stay responsive while waiting on
+        the network. Transcription has already happened (and been reviewed) by this point -
+        this is just the Gemini image-edit call."""
+        try:
+            self.ai_status_text = "Sending image for processing..."
+            self.ai_status_ready.set()
+            client = self.get_custard_cream_client()
+            edited_bytes = client.edit_image(still_path.read_bytes(), prompt_text)
+            if edited_bytes is None:
+                self.ai_result = ("status", "No image returned")
+            else:
+                self.ai_status_text = "Received result, saving..."
+                self.ai_status_ready.set()
+                self.ai_result = ("image", edited_bytes, prompt_text)
         except Exception as e:
             print(f"Speak: AI edit failed: {e}")
             self.ai_result = ("status", "AI edit failed")
@@ -1004,7 +1269,6 @@ class CustardCreamCamera():
         self.ai_pending = False
         result = self.ai_result
         self.ai_result = None
-        self.ai_prompt_text = None
         self.ai_done.clear()
         came_from_play = self.mode == "play"
 
@@ -1024,7 +1288,7 @@ class CustardCreamCamera():
             self.ai_prompts_by_path[out_path] = prompt_text
             print(f"Saved {out_path} (prompt: {prompt_text!r})")
 
-            result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((480, 320))
+            result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((self.screen.WIDTH, self.screen.HEIGHT))
             self.show_result(result_img, hold_seconds=self.custard_cream_settings.get("result_hold_seconds", 4))
 
             if came_from_play:
@@ -1087,12 +1351,16 @@ class CustardCreamCamera():
             self.voice_partial_ready.clear()
             dirty = True
 
-        if self.ai_prompt_ready.is_set():
-            self.ai_prompt_ready.clear()
+        if self.ai_status_ready.is_set():
+            self.ai_status_ready.clear()
             dirty = True
 
         if self.print_status_ready.is_set():
             self.print_status_ready.clear()
+            dirty = True
+
+        if self.ai_pending and self.ai_transcribe_done.is_set():
+            self.review_ai_prompt()
             dirty = True
 
         if self.ai_pending and self.ai_done.is_set():
@@ -1111,7 +1379,7 @@ class CustardCreamCamera():
             if self.voice_recording:
                 self.screen.draw(self.status_frame(self.voice_partial_text or "Recording... release to send"))
             elif self.ai_pending:
-                self.screen.draw(self.status_frame(self.ai_prompt_text or "Processing..."))
+                self.screen.draw(self.status_frame(self.ai_status_text or "Processing..."))
             elif self.publish_pending:
                 self.screen.draw(self.status_frame("Publishing..."))
             elif self.print_pending:

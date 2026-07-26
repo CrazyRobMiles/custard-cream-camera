@@ -1,10 +1,9 @@
 class BaseDisplay:
     """Common interface every display backend must implement."""
 
-    WIDTH = 480
-    HEIGHT = 320
-
-    def __init__(self):
+    def __init__(self, width=480, height=320):
+        self.WIDTH = width
+        self.HEIGHT = height
         self.quit_requested = False
 
     def set_buttons(self, buttons):

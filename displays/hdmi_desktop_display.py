@@ -15,11 +15,8 @@ class HDMIDesktopDisplay(BaseDisplay):
     Simpler and more portable than HDMIPygameDisplay, at the cost of a little draw performance.
     """
 
-    WIDTH = 480
-    HEIGHT = 320
-
-    def __init__(self, fullscreen=True, scale=1):
-        super().__init__()
+    def __init__(self, fullscreen=True, scale=1, width=480, height=320):
+        super().__init__(width, height)
 
         self.root = tk.Tk()
         self.root.title("Custard Cream Camera")

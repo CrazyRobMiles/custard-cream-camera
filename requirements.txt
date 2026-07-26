@@ -1,8 +1,6 @@
 picamera2
 pillow
 numpy
-spidev
-RPi.GPIO
 pygame
 google-genai
 vosk

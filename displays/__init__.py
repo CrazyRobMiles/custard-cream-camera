@@ -37,21 +37,23 @@ def create_display(settings=None):
 
     settings = settings or {}
     display_settings = settings.get("display", {})
-    display_type = display_settings.get("type", "ili9486")
+    display_type = display_settings.get("type", "hdmi-desktop")
+    # Logical canvas size everything is drawn/laid out against - independent of the physical
+    # window/output size (see hdmi-pygame's window_width/window_height), and configurable so a
+    # bigger canvas (more room for on-screen text/keyboards) can be tried without committing to
+    # it if it costs too much frame rate.
+    width = display_settings.get("width", 480)
+    height = display_settings.get("height", 320)
 
     if display_type == "hdmi-pygame":
         _ensure_display_env()
         from .hdmi_pygame_display import HDMIPygameDisplay
-        return HDMIPygameDisplay(**display_settings.get("hdmi-pygame", {}))
+        return HDMIPygameDisplay(width=width, height=height, **display_settings.get("hdmi-pygame", {}))
 
     if display_type == "hdmi-desktop":
         _ensure_display_env()
         from .hdmi_desktop_display import HDMIDesktopDisplay
-        return HDMIDesktopDisplay(**display_settings.get("hdmi-desktop", {}))
-
-    if display_type == "ili9486":
-        from .ili9486_display import ILI9486Display
-        return ILI9486Display(**display_settings.get("ili9486", {}))
+        return HDMIDesktopDisplay(width=width, height=height, **display_settings.get("hdmi-desktop", {}))
 
     raise ValueError(f"Unknown display type: {display_type!r}")
 

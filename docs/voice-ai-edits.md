@@ -1,6 +1,12 @@
 # Voice-Prompted AI Edits
 
-In [Play mode](capture-and-play-modes.md), hold **Speak** (or use the shutter remote's speak key, which works from any mode), say an editing instruction (e.g. "make it look like a watercolor painting"), and release — the app transcribes what you said and sends it with the currently displayed image to Google's Gemini ("Nano Banana") image model for editing. The result is saved to `captures/` as `ai_<timestamp>.jpg`, shown on screen for a few seconds, and becomes the new current selection in Play mode. Image editing always goes through Gemini; the viewfinder and other buttons stay responsive while it's working since the network calls run on a background thread.
+In [Play mode](capture-and-play-modes.md), hold **Speak** (or use the shutter remote's speak key, which works from any mode), say an editing instruction (e.g. "make it look like a watercolor painting"), and release. The app transcribes what you said, then shows you the transcript with three options before anything is sent anywhere for editing:
+
+* **Send** — sends it, with the currently displayed image, to Google's Gemini ("Nano Banana") image model for editing.
+* **Reject** — discards it. Nothing is sent for editing; you're back where you started.
+* **Edit** — opens an on-screen keyboard to correct the text (misheard words, added detail, etc.), then returns to this same Send/Reject/Edit screen with the corrected text.
+
+This review step exists because speech recognition isn't perfect, and a misheard instruction sent straight to an image-editing model wastes a request (and, depending on your Gemini plan, a quota unit) on a result you never wanted. Once sent, the result is saved to `captures/` as `ai_<timestamp>.jpg`, shown on screen for a few seconds, and becomes the new current selection in Play mode. Image editing always goes through Gemini; the viewfinder and other buttons stay responsive while it's working since the network calls run on a background thread.
 
 Transcription (turning your speech into the text prompt) is a **pluggable backend**, selected via `"transcribe_provider"` under `"custard_cream"` in [settings.json](../settings.json):
 
@@ -35,6 +41,8 @@ Recording length and the result's on-screen hold time are also configurable unde
 
 ## Diagnostics
 
-Every stage prints a `Speak: ...` line to the terminal (or `custard_cream_camera.log`), so a stuck or failed edit can be narrowed down to exactly where it stopped: recording start/stop, transcription (whichever backend is active) and its result, the request sent for image editing, and the response received (including any text the model returned instead of an image, e.g. a safety refusal — normally invisible, since the caller only ever sees `None`).
+Progress is shown on screen as well as logged. While a request is in flight, the banner that would otherwise just say "Processing..." instead shows what's actually happening: "Transcribing...", then (once you've reviewed and sent the prompt) "Sending image for processing...", then "Received result, saving..." — the same on-screen-diagnostics idea used for [printing](printing.md), applied to this workflow.
+
+Every stage also prints a `Speak: ...` line to the terminal (or `custard_cream_camera.log`), so a stuck or failed edit can be narrowed down to exactly where it stopped: recording start/stop, transcription (whichever backend is active) and its result, whether the prompt was sent/rejected at the review step, the request sent for image editing, and the response received (including any text the model returned instead of an image, e.g. a safety refusal — normally invisible on screen, since the caller only ever sees `None`).
 
 Requests to Gemini time out after `"timeout_seconds"` (default `30`) under `"custard_cream"` in settings.json — without this, a stalled connection (flaky wifi, a network path that silently drops packets) would hang indefinitely with no error and no diagnostic output at all. This only applies to work that actually goes over the network: image editing always, and transcription only when `"transcribe_provider"` is `"gemini"` — Vosk transcription is local and isn't affected by connectivity at all. If a Gemini-backed request hangs repeatedly even with a normally-reliable connection, try raising `"timeout_seconds"` in case it's just Gemini being slow rather than the connection actually stalling.

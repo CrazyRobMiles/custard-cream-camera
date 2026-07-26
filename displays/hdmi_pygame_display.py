@@ -15,11 +15,8 @@ class HDMIPygameDisplay(BaseDisplay):
     your particular setup - see HDMIDesktopDisplay for a plain-window alternative.
     """
 
-    WIDTH = 480
-    HEIGHT = 320
-
-    def __init__(self, fullscreen=True, window_width=800, window_height=480):
-        super().__init__()
+    def __init__(self, fullscreen=True, window_width=800, window_height=480, width=480, height=320):
+        super().__init__(width, height)
 
         pygame.init()
         pygame.mouse.set_visible(not fullscreen)

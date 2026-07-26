@@ -80,6 +80,10 @@ class HDMIPygameDisplay(BaseDisplay):
         return self.buttons.update()
 
     def draw(self, img):
+        # Copy before drawing buttons on - callers (e.g. self.play_view) keep their own
+        # reference to img and redraw it again later; drawing buttons directly onto it would
+        # permanently stamp that button set into the stored image itself.
+        img = img.copy()
         draw = ImageDraw.Draw(img)
         self.buttons.draw(draw)
 

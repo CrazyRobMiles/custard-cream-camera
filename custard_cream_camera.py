@@ -921,18 +921,26 @@ class CustardCreamCamera():
     def qr_result_frame(self, url, phrase):
         """Shown after a successful publish to custard-cream-server: a QR code linking to the
         picture's page, plus the three-word phrase as a human-readable fallback for anyone who
-        can't scan it.
+        can't scan it - drawn over the photo that was just published (rather than a blank
+        background), so it stays visible while this screen is up instead of disappearing until
+        Done is pressed.
         """
-        frame = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (0, 0, 0))
+        frame = self.play_view.copy() if self.play_view is not None else Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (0, 0, 0))
         draw = ImageDraw.Draw(frame)
 
         qr_size = 200
         url = url.replace(":3001","")
         qr_img = qrcode.make(url).convert("RGB").resize((qr_size, qr_size))
         qr_x = 20
-        frame.paste(qr_img, (qr_x, frame.height // 2 - qr_size // 2))
+        qr_y = frame.height // 2 - qr_size // 2
+        frame.paste(qr_img, (qr_x, qr_y))
 
+        # Solid backing panel behind the text only (the QR code already has its own white quiet
+        # zone from qrcode.make(), so it stays scannable over the photo without one) - otherwise
+        # the "Published!"/phrase text could land on top of light or noisy parts of the photo and
+        # become unreadable.
         text_x = qr_x + qr_size + 10
+        draw.rectangle((text_x - 10, qr_y, frame.width, qr_y + qr_size), fill=(0, 0, 0))
         draw.text((text_x, frame.height // 2 - 30), "Published!", font=self.medium_font, fill=(255, 255, 255))
         draw.text((text_x, frame.height // 2 + 10), phrase, font=self.phrase_font, fill=(255, 255, 0))
 

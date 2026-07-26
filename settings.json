@@ -29,14 +29,14 @@
         }
     },
     "shutter_remote": {
-        "enabled": true,
+        "enabled": false,
         "photo_key": "KEY_VOLUMEUP",
         "speak_key": "KEY_ENTER",
         "device_name": "AB Shutter3",
         "grab": true
     },
     "serial_remote": {
-        "enabled": false,
+        "enabled": true,
         "port": "/dev/ttyUSB0",
         "baud_rate": 115200
     },

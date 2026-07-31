@@ -3,7 +3,7 @@
 # location so it works regardless of where the repo is cloned or what the
 # current working directory is when it's double-clicked.
 
-DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 cd "$DIR"
 
 # API keys (GOOGLE_API_KEY, FLICKR_API_KEY, FLICKR_API_SECRET, BSKY_HANDLE, BSKY_APP_PASSWORD,

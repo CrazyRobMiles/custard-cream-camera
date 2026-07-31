@@ -1,8 +1,8 @@
 # Printing
 
-The **Print** button (in [Play mode](capture-and-play-modes.md)) sends the currently displayed photo to CUPS via [pycups](https://github.com/OpenPrinting/pycups) — see the [Canon SELPHY CP400 setup](printer-cups-setup.md) for getting a printer configured. Submitting and watching the job runs on a background thread, the same way [publishing](../../lib/publishers/) and [AI edits](voice-ai-edits.md) do, so the viewfinder/buttons stay responsive while it works. This whole flow (`prepare_print_copy()`/`run_print()`/`wait_for_print_job()`/...) lives in [lib/review_station.py](../../lib/review_station.py), shared with the [host app](../../host/).
+The **Print** button (see [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md)) sends the currently displayed photo to CUPS via [pycups](https://github.com/OpenPrinting/pycups) — see the [Canon SELPHY CP400 setup](printer-cups-setup.md) for getting a printer configured. Submitting and watching the job runs on a background thread, the same way [publishing](../lib/publishers/) and [AI edits](voice-ai-edits.md) do, so the app stays responsive while it works. This whole flow (`prepare_print_copy()`/`run_print()`/`wait_for_print_job()`/...) lives in [lib/review_station.py](../lib/review_station.py).
 
-If no `"printer"` is set under `"printing"` in [settings.json](../settings.json), the app falls back to CUPS's configured default destination — if neither exists, printing fails with "No printer configured" (check `lpstat -p -d` for the list of configured printers and current default, and `sudo lpadmin -d <printer-name>` to set one).
+If no `"printer"` is set under `"printing"` in [settings.json](../settings.json.example), the app falls back to CUPS's configured default destination — if neither exists, printing fails with "No printer configured" (check `lpstat -p -d` for the list of configured printers and current default, and `sudo lpadmin -d <printer-name>` to set one).
 
 ## Detecting a Failed Print
 
@@ -22,13 +22,13 @@ Because this goes through pycups rather than shelling out, it doesn't need `sudo
 
 ## Print Testing
 
-Set `"test_mode": true` under `"printing"` in [settings.json](../settings.json) to try out the print pipeline — watermark and date stamp included — without spending paper/ink: pressing **Print** saves the exact image that would have been sent to the printer into `"test_folder"` (default `print_tests/`, gitignored) instead of actually printing it. The console prints exactly where it was saved. Set back to `false` (the default) to resume printing for real.
+Set `"test_mode": true` under `"printing"` in [settings.json](../settings.json.example) to try out the print pipeline — watermark and date stamp included — without spending paper/ink: pressing **Print** saves the exact image that would have been sent to the printer into `"test_folder"` (default `print_tests/`, gitignored) instead of actually printing it. The console prints exactly where it was saved. Set back to `false` (the default) to resume printing for real.
 
 ## Watermark and Date Stamp
 
-Prints can have a watermark logo and/or a date/time stamp composited on automatically — implemented in [lib/print_overlays.py](../../lib/print_overlays.py). Both are applied only to the copy sent to the printer (via a temporary file); the original saved photo in `captures/` is never modified.
+Prints can have a watermark logo and/or a date/time stamp composited on automatically — implemented in [lib/print_overlays.py](../lib/print_overlays.py). Both are applied only to the copy sent to the printer (via a temporary file); the original saved photo in `captures/` is never modified.
 
-**Watermark** (`"watermark"` in [settings.json](../settings.json)):
+**Watermark** (`"watermark"` in [settings.json](../settings.json.example)):
 
 ```json
 "watermark": {
@@ -61,7 +61,7 @@ Prints can have a watermark logo and/or a date/time stamp composited on automati
 }
 ```
 
-* `"format"` — a [`strftime`](https://docs.python.org/3/library/time.html#time.strftime) format string. The stamp reflects when the photo was actually taken (the file's modification time), not when it's printed.
+* `"format"` — a [`strftime`](https://docs.python.org/3/library/time.html#time.strftime) format string. The stamp reflects the file's modification time - in camera mode that's when the photo was actually taken; in FTP mode it's the moment the file was saved into `captures/` after arriving over FTP, not when the camera actually took the shot (the camera's own EXIF capture time isn't read).
 * `"font_fraction"` — text size as a fraction of the photo's height.
 * `"text_colour"`/`"background_colour"` — `[R, G, B, A]`; the background box (drawn behind the text for legibility over busy photos) defaults to semi-transparent black.
 

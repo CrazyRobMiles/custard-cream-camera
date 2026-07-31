@@ -6,7 +6,7 @@ Small "EV-"/"EV+" buttons in the top corners of the live viewfinder let you bias
 
 The current EV offset, plus the actual metered shutter speed and gain, are shown at the top of the viewfinder at all times - useful for confirming the buttons are having a real effect, not just changing the on-screen number. The EV offset resets to the default each time the app starts (it isn't saved back to `settings.json`).
 
-Range and step are configurable under `"exposure"` in [settings.json](../settings.json):
+Range and step are configurable under `"exposure"` in [settings.json](../settings.json.example):
 
 ```json
 "exposure": {

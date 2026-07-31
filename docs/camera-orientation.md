@@ -1,6 +1,6 @@
 # Camera Orientation
 
-If the live viewfinder (or captured photos) comes out flipped or upside down - typically because the HQ camera sensor ended up mounted rotated in the enclosure - correct it with `"hflip"`/`"vflip"` under `"camera"` in [settings.json](../settings.json), rather than physically remounting the sensor or rotating images in software after the fact:
+If the live viewfinder (or captured photos) comes out flipped or upside down - typically because the HQ camera sensor ended up mounted rotated in the enclosure - correct it with `"hflip"`/`"vflip"` under `"camera"` in [settings.json](../settings.json.example), rather than physically remounting the sensor or rotating images in software after the fact:
 
 ```json
 "camera": {

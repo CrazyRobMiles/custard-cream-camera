@@ -1,17 +1,17 @@
 # Shutter Remotes
 
-The app supports two independent physical shutter remotes — a Bluetooth one and a wired USB-serial one — each with its own `"enabled"` flag in [settings.json](../settings.json), so either or both can be active at once.
+The app supports two independent physical shutter remotes — a Bluetooth one and a wired USB-serial one — each with its own `"enabled"` flag in [settings.json](../settings.json.example), so either or both can be active at once.
 
 ## Bluetooth Shutter Remote
 
 Cheap Bluetooth camera remotes don't have a real "pairing mode" — they just have two buttons/positions (labelled iOS/Android or similar) that each send a different key, since iOS and Android camera apps historically listened for different shortcuts. [shutter_remote.py](../shutter_remote.py) listens for both directly at the input-device level (via `evdev`), independent of which window has focus:
 
-* **iOS** button → Volume Up (`KEY_VOLUMEUP`) → takes a photo in [Capture mode](capture-and-play-modes.md), the same action as the **Click** button - or, if you're currently in Play mode reviewing photos, switches back to Capture mode without taking a photo.
+* **iOS** button → Volume Up (`KEY_VOLUMEUP`) → takes a photo in [Capture mode](home-screen-modes.md), the same action as the **Click** button - or, if you're currently in Play mode reviewing photos, switches back to Capture mode without taking a photo.
 * **Android** button → Enter (`KEY_ENTER`) → hold-to-talk, the same as **Play** mode's **Speak** button: pressing starts recording, releasing sends it. Unlike the photo key, this works from any mode - it always acts on a fresh capture, bypassing Play mode entirely. This relies on the remote sending a genuine press-then-release pair for a physical hold, which is normal HID keyboard behavior, but worth confirming for your specific unit (see below).
 
 To enable it:
 
-1. Set `"shutter_remote": {"enabled": true}` in [settings.json](../settings.json).
+1. Set `"shutter_remote": {"enabled": true}` in [settings.json](../settings.json.example).
 2. Make sure your user can read input devices: `sudo usermod -aG input $USER`, then log out and back in (or reboot) for group membership to take effect.
 
 The Volume Up mapping is easy to confirm: pressing the iOS button should show your desktop's volume OSD. The Enter mapping is a best guess for "Android mode" on these remotes — if it doesn't trigger recording, confirm the actual key it sends (see below), and set `"photo_key"`/`"speak_key"` in `settings.json` to match (either can be set to `null` to disable that mapping without disabling the other).
@@ -52,7 +52,7 @@ For a simple homemade remote connected over USB serial and sending the word `cli
 To enable it:
 
 1. Plug the remote in and find its device path: `ls /dev/ttyUSB* /dev/ttyACM*` (USB-serial adapters usually show up as one or the other, depending on the chip they use).
-2. Set `"serial_remote"` in [settings.json](../settings.json):
+2. Set `"serial_remote"` in [settings.json](../settings.json.example):
    ```json
    "serial_remote": {
        "enabled": true,

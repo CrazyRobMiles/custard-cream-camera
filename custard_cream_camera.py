@@ -1,4 +1,5 @@
 import json
+import queue
 import select
 import sys
 import termios
@@ -7,21 +8,15 @@ import tty
 from pathlib import Path
 from threading import Event
 
-from libcamera import Transform
 from PIL import Image, ImageDraw, ImageFont
-from picamera2 import Picamera2
 
-# Shared with the host app (see host/custard_cream_camera_host.py) - review_station.py plus the
-# displays/publishers/transcription packages and NanoBananaClient.py/print_overlays.py all live
-# in ../lib, one level up from this app's own folder.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+# review_station.py plus the displays/publishers/transcription packages and
+# NanoBananaClient.py/print_overlays.py/ftp_server.py all live in ./lib, next to this file.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
 from displays import Button, create_display
 from review_station import ReviewStationMixin
 from transcription import create_transcriber
-
-from serial_shutter_remote import SerialShutterRemote
-from shutter_remote import ShutterRemote
 
 SETTINGS_PATH = Path(__file__).parent / "settings.json"
 
@@ -59,11 +54,21 @@ class Keyboard:
 
 
 class CustardCreamCamera(ReviewStationMixin):
+    """Two home screens, picked by settings.json's "mode":
+
+    - "camera" (self.has_camera=True): a live Picamera2 viewfinder with Capture/Play modes.
+    - "ftp" (self.has_camera=False): no camera - photos arrive over FTP (see lib/ftp_server.py)
+      and the app is always in Play/play_grid, starting on a "waiting for photos" placeholder.
+
+    Either way, reviewing/printing/publishing/voice-editing photos already in save_dir is the
+    same shared ReviewStationMixin logic - see lib/review_station.py.
+    """
 
     def __init__(self):
         settings = load_settings()
         self.settings = settings
         self.app_dir = Path(__file__).resolve().parent
+        self.has_camera = settings.get("mode", "camera") == "camera"
 
         # Load three font sizes
         self.small_font = ImageFont.truetype(
@@ -87,94 +92,115 @@ class CustardCreamCamera(ReviewStationMixin):
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18
         )
 
-        self.picam2 = Picamera2()
-
         # Created before the preview config below, since the preview capture size follows
         # self.screen.WIDTH/HEIGHT (the logical canvas size, configurable via settings["display"]
         # - see displays/__init__.py) rather than a hardcoded resolution.
         self.screen = create_display(settings)
 
-        # Corrects for the sensor being mounted rotated 180 degrees in this build - flip both
-        # axes rather than rotating every captured frame in software afterward.
-        camera_settings = settings.get("camera", {})
-        camera_transform = Transform(
-            hflip=camera_settings.get("hflip", False),
-            vflip=camera_settings.get("vflip", False),
-        )
-
-        self.preview_config = self.picam2.create_preview_configuration(
-            main={"size": (self.screen.WIDTH, self.screen.HEIGHT), "format": "BGR888"},
-            transform=camera_transform,
-        )
-
-        self.still_config = self.picam2.create_still_configuration(
-            main={"size": (4056, 3040), "format": "BGR888"},
-            transform=camera_transform,
-        )
-
-        self.picam2.configure(self.preview_config)
-        self.picam2.start()
-
         self.audio_output_settings = settings.get("audio_output", {})
-
-        # Exposure compensation via the on-screen +/- buttons, for backlit subjects etc. The
-        # libcamera "ExposureValue" control (the "correct" way to bias AE without disabling it)
-        # turned out to be a no-op on this camera/tuning stack - confirmed by watching the
-        # on-screen shutter-speed readout while pressing the buttons and seeing it never move -
-        # so instead this snapshots the AE-computed ExposureTime/AnalogueGain as a baseline the
-        # moment EV moves off zero (see exposure_baseline below) and explicitly scales
-        # ExposureTime by 2**ev from that baseline, handing control back to AE at EV 0.
-        exposure_settings = settings.get("exposure", {})
-        self.ev_step = exposure_settings.get("step", 0.5)
-        self.ev_min = exposure_settings.get("min", -2.0)
-        self.ev_max = exposure_settings.get("max", 2.0)
-        self.exposure_value = exposure_settings.get("default", 0.0)
-        # (exposure_time_us, analogue_gain) captured from AE right as EV last moved off zero -
-        # every subsequent adjustment scales from this fixed point rather than the live reading,
-        # since once AE is disabled the live reading is just our own last override, not a fresh
-        # measurement - reading from it again would compound drift on repeated presses instead
-        # of giving a clean, repeatable +/- N stops from where AE actually metered the scene.
-        self.exposure_baseline = None
-
-        self.frame_ready = Event()
-
-        self.request_next_frame()
 
         self.kbd = Keyboard()
 
         button_y = self.screen.HEIGHT - 50
-
-        # Capture mode: live viewfinder, take a photo or switch to Play mode to review/act on
-        # existing ones. There's no on-screen quit button any more - use keyboard 'q', or
-        # Escape/window-close on the HDMI backends.
-        self.capture_menu = (
-            *self._row_of_buttons(button_y, 50, (
-                ("Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
-                ("Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
-            )),
-            # Exposure compensation - tucked into the top corners since the bottom row is full.
-            Button(0, 0, 50, 40, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
-            Button(self.screen.WIDTH - 50, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
-        )
-
-        # Play mode: reviews/acts on captures/ directly - Print/Speak/Publish always target
-        # whatever's currently selected (self.play_index), no separate "choose, then act" step.
-        # Left/Right step through images one at a time; Page opens a 3x3 grid to jump further.
         arrow_y = 40 + (self.screen.HEIGHT - 40 - 50 - 100) // 2
-        self.play_menu = (
-            *self._row_of_buttons(button_y, 50, (
-                ("Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
-                ("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
-                ("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt),
-                ("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
-            )),
-            Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
-            Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
-            Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
-            Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
-        )
 
-        self.screen.set_buttons(self.capture_menu)
+        if self.has_camera:
+            # picamera2/libcamera and the shutter-remote modules are only importable on a device
+            # with the Pi camera stack/hardware actually installed - never attempted in FTP mode.
+            from libcamera import Transform
+            from picamera2 import Picamera2
+            from serial_shutter_remote import SerialShutterRemote
+            from shutter_remote import ShutterRemote
+
+            self.picam2 = Picamera2()
+
+            # Corrects for the sensor being mounted rotated 180 degrees in this build - flip both
+            # axes rather than rotating every captured frame in software afterward.
+            camera_settings = settings.get("camera", {})
+            camera_transform = Transform(
+                hflip=camera_settings.get("hflip", False),
+                vflip=camera_settings.get("vflip", False),
+            )
+
+            self.preview_config = self.picam2.create_preview_configuration(
+                main={"size": (self.screen.WIDTH, self.screen.HEIGHT), "format": "BGR888"},
+                transform=camera_transform,
+            )
+
+            self.still_config = self.picam2.create_still_configuration(
+                main={"size": (4056, 3040), "format": "BGR888"},
+                transform=camera_transform,
+            )
+
+            self.picam2.configure(self.preview_config)
+            self.picam2.start()
+
+            # Exposure compensation via the on-screen +/- buttons, for backlit subjects etc. The
+            # libcamera "ExposureValue" control (the "correct" way to bias AE without disabling it)
+            # turned out to be a no-op on this camera/tuning stack - confirmed by watching the
+            # on-screen shutter-speed readout while pressing the buttons and seeing it never move -
+            # so instead this snapshots the AE-computed ExposureTime/AnalogueGain as a baseline the
+            # moment EV moves off zero (see exposure_baseline below) and explicitly scales
+            # ExposureTime by 2**ev from that baseline, handing control back to AE at EV 0.
+            exposure_settings = settings.get("exposure", {})
+            self.ev_step = exposure_settings.get("step", 0.5)
+            self.ev_min = exposure_settings.get("min", -2.0)
+            self.ev_max = exposure_settings.get("max", 2.0)
+            self.exposure_value = exposure_settings.get("default", 0.0)
+            # (exposure_time_us, analogue_gain) captured from AE right as EV last moved off zero -
+            # every subsequent adjustment scales from this fixed point rather than the live reading,
+            # since once AE is disabled the live reading is just our own last override, not a fresh
+            # measurement - reading from it again would compound drift on repeated presses instead
+            # of giving a clean, repeatable +/- N stops from where AE actually metered the scene.
+            self.exposure_baseline = None
+
+            self.frame_ready = Event()
+            self.request_next_frame()
+
+            # Capture mode: live viewfinder, take a photo or switch to Play mode to review/act on
+            # existing ones. There's no on-screen quit button any more - use keyboard 'q', or
+            # Escape/window-close on the HDMI backends.
+            self.capture_menu = (
+                *self._row_of_buttons(button_y, 50, (
+                    ("Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
+                    ("Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
+                )),
+                # Exposure compensation - tucked into the top corners since the bottom row is full.
+                Button(0, 0, 50, 40, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
+                Button(self.screen.WIDTH - 50, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
+            )
+
+            # Play mode: reviews/acts on captures/ directly - Print/Speak/Publish always target
+            # whatever's currently selected (self.play_index), no separate "choose, then act" step.
+            # Left/Right step through images one at a time; Page opens a 3x3 grid to jump further.
+            self.play_menu = (
+                *self._row_of_buttons(button_y, 50, (
+                    ("Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
+                    ("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
+                    ("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt),
+                    ("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
+                )),
+                Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
+                Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
+                Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
+                Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
+            )
+
+            self.screen.set_buttons(self.capture_menu)
+        else:
+            # No "Capture" button - there's no other mode to switch to, since this app never
+            # captures anything itself in FTP mode.
+            self.play_menu = (
+                *self._row_of_buttons(button_y, 50, (
+                    ("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
+                    ("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt),
+                    ("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
+                )),
+                Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
+                Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
+                Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
+                Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
+            )
 
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
@@ -211,11 +237,12 @@ class CustardCreamCamera(ReviewStationMixin):
         self.save_file_name = None
         self.last_photo_path = None
 
-        # mode is one of "capture", "play", "play_grid". play_view holds whatever the current
-        # single-image/grid frame is, drawn in place of the live viewfinder while in Play mode.
-        # play_images/play_index track the review position - Print/Speak/Publish always act on
-        # play_images[play_index], no separate "choose, then act" step.
-        self.mode = "capture"
+        # mode is one of "capture", "play", "play_grid" - "capture" only ever applies in camera
+        # mode. play_view holds whatever the current single-image/grid frame is, drawn in place
+        # of the live viewfinder while in Play mode. play_images/play_index track the review
+        # position - Print/Speak/Publish always act on play_images[play_index], no separate
+        # "choose, then act" step.
+        self.mode = "capture" if self.has_camera else "play"
         self.play_images = []
         self.play_index = 0
         self.play_page = 0
@@ -270,66 +297,86 @@ class CustardCreamCamera(ReviewStationMixin):
         # of the plain text banner used for Flickr/Bluesky.
         self.publish_qr_result = None
 
-        # Shutter remotes - Bluetooth and/or wired USB-serial, either or both can be enabled at
-        # once (see settings.json's "shutter_remote"/"serial_remote" blocks). The Bluetooth
-        # remote's physical button sends a real press+release, so its "speak" key drives
-        # hold-to-talk the same way the on-screen Speak button does; the wired remote only ever
-        # sends a single-shot "click", so it's wired to remote_photo_requested only, the same
-        # event the Bluetooth remote's photo_key sets. All the Events below are set from a
-        # remote's background listener thread and only ever acted on in process_frame(), on the
-        # main thread, since drawing/Picamera2 calls aren't safe to make from a background thread.
-        remote_settings = settings.get("shutter_remote", {})
-        self.remote_photo_requested = Event()
-        self.remote_speak_down = Event()
-        self.remote_speak_up = Event()
-        self.shutter_remote = None
-        if remote_settings.get("enabled", False):
-            bindings = {}
-            photo_key = remote_settings.get("photo_key", "KEY_VOLUMEUP")
-            speak_key = remote_settings.get("speak_key", "KEY_ENTER")
-            if photo_key:
-                bindings[photo_key] = (self.remote_photo_requested.set, None)
-            if speak_key:
-                bindings[speak_key] = (self.remote_speak_down.set, self.remote_speak_up.set)
+        if self.has_camera:
+            # Shutter remotes - Bluetooth and/or wired USB-serial, either or both can be enabled at
+            # once (see settings.json's "shutter_remote"/"serial_remote" blocks). The Bluetooth
+            # remote's physical button sends a real press+release, so its "speak" key drives
+            # hold-to-talk the same way the on-screen Speak button does; the wired remote only ever
+            # sends a single-shot "click", so it's wired to remote_photo_requested only, the same
+            # event the Bluetooth remote's photo_key sets. All the Events below are set from a
+            # remote's background listener thread and only ever acted on in process_frame(), on the
+            # main thread, since drawing/Picamera2 calls aren't safe to make from a background thread.
+            remote_settings = settings.get("shutter_remote", {})
+            self.remote_photo_requested = Event()
+            self.remote_speak_down = Event()
+            self.remote_speak_up = Event()
+            self.shutter_remote = None
+            if remote_settings.get("enabled", False):
+                bindings = {}
+                photo_key = remote_settings.get("photo_key", "KEY_VOLUMEUP")
+                speak_key = remote_settings.get("speak_key", "KEY_ENTER")
+                if photo_key:
+                    bindings[photo_key] = (self.remote_photo_requested.set, None)
+                if speak_key:
+                    bindings[speak_key] = (self.remote_speak_down.set, self.remote_speak_up.set)
 
-            self.shutter_remote = ShutterRemote(
-                bindings=bindings,
-                device_name=remote_settings.get("device_name"),
-                grab=remote_settings.get("grab", False),
-            )
-            self.shutter_remote.start()
+                self.shutter_remote = ShutterRemote(
+                    bindings=bindings,
+                    device_name=remote_settings.get("device_name"),
+                    grab=remote_settings.get("grab", False),
+                )
+                self.shutter_remote.start()
 
-        serial_remote_settings = settings.get("serial_remote", {})
-        self.serial_remote = None
-        if serial_remote_settings.get("enabled", False):
-            self.serial_remote = SerialShutterRemote(
-                port=serial_remote_settings.get("port", "/dev/ttyUSB0"),
-                on_click=self.remote_photo_requested.set,
-                baud_rate=serial_remote_settings.get("baud_rate", 9600),
-            )
-            self.serial_remote.start()
+            serial_remote_settings = settings.get("serial_remote", {})
+            self.serial_remote = None
+            if serial_remote_settings.get("enabled", False):
+                self.serial_remote = SerialShutterRemote(
+                    port=serial_remote_settings.get("port", "/dev/ttyUSB0"),
+                    on_click=self.remote_photo_requested.set,
+                    baud_rate=serial_remote_settings.get("baud_rate", 9600),
+                )
+                self.serial_remote.start()
+        else:
+            from ftp_server import FTPReceiver
+
+            # FTP receiver - runs on its own background thread; on_file_received() (see
+            # lib/ftp_server.py) flattens each completed upload into save_dir and queues its Path
+            # here for process_frame() to pick up on the main thread.
+            self.incoming_queue = queue.Queue()
+            self.ftp_receiver = FTPReceiver(settings.get("ftp", {}), self.save_dir, self.incoming_queue)
+            self.ftp_receiver.start()
+
+            # Picks up anything already in save_dir (e.g. left over from a previous run) and shows
+            # the newest, or the "waiting for photos" placeholder if there's nothing yet.
+            self.enter_play()
 
     # ------------------------------------------------------------
-    # ReviewStationMixin hooks - the only camera-specific seams in the shared Play/Publish/
-    # Speak/Print flow (see lib/review_station.py)
+    # ReviewStationMixin hooks - the only mode-specific seams in the shared Play/Publish/Speak/
+    # Print flow (see lib/review_station.py)
     # ------------------------------------------------------------
 
     def _capture_fresh_still(self):
         """Used by finish_voice_prompt() when the remote's speak key triggers an edit directly
         from Capture mode, bypassing Play mode entirely - there's no existing photo to reuse, so
-        this captures one fresh, the same way save_image() does for a normal photo."""
+        this captures one fresh, the same way save_image() does for a normal photo. Only reachable
+        in camera mode - nothing sets remote_speak_up without a shutter remote."""
         still_path = self.save_dir / "ai_source.jpg"
         self.picam2.switch_mode_and_capture_file(self.still_config, str(still_path))
         print(f"Speak: captured fresh photo {still_path}")
         return still_path
 
     def _non_play_menu(self):
-        return self.capture_menu
+        return self.capture_menu if self.has_camera else self.play_menu
 
     def _empty_play_buttons(self, button_y):
+        if not self.has_camera:
+            return ()
         return (
             Button(0, button_y, self.screen.WIDTH, 50, "Capture", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
         )
+
+    def _empty_play_message(self):
+        return "No photos yet" if self.has_camera else "Waiting for photos..."
 
     def adjust_exposure(self, delta):
         new_value = round(min(self.ev_max, max(self.ev_min, self.exposure_value + delta)), 2)
@@ -379,7 +426,7 @@ class CustardCreamCamera(ReviewStationMixin):
         self.show_result(white_frame, hold_seconds=0.5)
 
     # ------------------------------------------------------------
-    # Capture mode <-> Play mode
+    # Capture mode <-> Play mode (camera mode only)
     # ------------------------------------------------------------
 
     def enter_capture(self):
@@ -424,41 +471,51 @@ class CustardCreamCamera(ReviewStationMixin):
 
         dirty = False
 
-        if self.frame_ready.is_set():
-            self.frame_ready.clear()
-            request = self.picam2.wait(self.pending_job)
-            frame = request.make_array("main")
-            self.last_metadata = request.get_metadata()
-            request.release()
+        if self.has_camera:
+            if self.frame_ready.is_set():
+                self.frame_ready.clear()
+                request = self.picam2.wait(self.pending_job)
+                frame = request.make_array("main")
+                self.last_metadata = request.get_metadata()
+                request.release()
 
-            self.finder = Image.fromarray(frame, "RGB")
+                self.finder = Image.fromarray(frame, "RGB")
 
-            if self.mode == "capture":
-                dirty = True
+                if self.mode == "capture":
+                    dirty = True
 
-            self.request_next_frame()
+                self.request_next_frame()
 
         if self.screen.update():
             dirty = True
 
-        if self.remote_photo_requested.is_set():
-            self.remote_photo_requested.clear()
-            if not self.ai_pending:
-                # In Play mode the physical shutter button switches back to Capture without
-                # taking a photo - it shouldn't blindly capture whatever the camera happens to
-                # be pointed at while you're mid-review of past photos.
-                if self.mode in ("play", "play_grid"):
-                    self.enter_capture()
-                else:
-                    self.save_image()
+        if self.has_camera:
+            if self.remote_photo_requested.is_set():
+                self.remote_photo_requested.clear()
+                if not self.ai_pending:
+                    # In Play mode the physical shutter button switches back to Capture without
+                    # taking a photo - it shouldn't blindly capture whatever the camera happens to
+                    # be pointed at while you're mid-review of past photos.
+                    if self.mode in ("play", "play_grid"):
+                        self.enter_capture()
+                    else:
+                        self.save_image()
 
-        if self.remote_speak_down.is_set():
-            self.remote_speak_down.clear()
-            self.start_voice_prompt()
+            if self.remote_speak_down.is_set():
+                self.remote_speak_down.clear()
+                self.start_voice_prompt()
 
-        if self.remote_speak_up.is_set():
-            self.remote_speak_up.clear()
-            self.finish_voice_prompt()
+            if self.remote_speak_up.is_set():
+                self.remote_speak_up.clear()
+                self.finish_voice_prompt()
+        else:
+            while True:
+                try:
+                    new_path = self.incoming_queue.get_nowait()
+                except queue.Empty:
+                    break
+                self._show_new_photo(new_path)
+                dirty = True
 
         if self.voice_partial_ready.is_set():
             self.voice_partial_ready.clear()
@@ -522,7 +579,7 @@ class CustardCreamCamera(ReviewStationMixin):
                 if key:
                     if key.lower() == "q":
                         return
-                    elif key == " ":
+                    elif key == " " and self.has_camera:
                         # Same "switch to Capture rather than shoot blind" rule as the physical
                         # shutter remote - see the equivalent branch in process_frame().
                         if self.mode in ("play", "play_grid"):
@@ -530,17 +587,25 @@ class CustardCreamCamera(ReviewStationMixin):
                         else:
                             self.save_image()
 
+                if not self.has_camera:
+                    # Nothing paces this loop in FTP mode the way frame_ready does in camera
+                    # mode - avoid spinning at full CPU polling an empty queue.
+                    time.sleep(0.02)
+
         except KeyboardInterrupt:
             pass
         finally:
             print("System stopping: tidying up")
-            if self.shutter_remote is not None:
-                self.shutter_remote.stop()
-            if self.serial_remote is not None:
-                self.serial_remote.stop()
+            if self.has_camera:
+                if self.shutter_remote is not None:
+                    self.shutter_remote.stop()
+                if self.serial_remote is not None:
+                    self.serial_remote.stop()
+                self.picam2.stop()
+            else:
+                self.ftp_receiver.stop()
             self.screen.close()
             self.kbd.close()
-            self.picam2.stop()
 
 
 def main():

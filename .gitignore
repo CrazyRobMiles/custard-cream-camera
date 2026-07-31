@@ -6,4 +6,5 @@
 **/print_tests/
 **/*.log
 **/secrets.sh
-host/ftp_incoming/
+settings.json
+ftp_incoming/

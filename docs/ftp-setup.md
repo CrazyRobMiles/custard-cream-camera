@@ -1,10 +1,10 @@
 # Receiving Photos over FTP
 
-The Sony A7R IV can upload JPEGs (optionally alongside RAW) to an FTP server automatically after each shot, or on demand for selected images, via its built-in FTP-transfer feature. This app runs that FTP server - [ftp_server.py](../ftp_server.py), built on [pyftpdlib](https://pyftpdlib.readthedocs.io/) - and shows each upload as it arrives, using the same review/print/publish/voice-edit flow as the camera app's Play mode (see [Reviewing Received Photos](reviewing-photos.md)).
+The Sony A7R IV can upload JPEGs (optionally alongside RAW) to an FTP server automatically after each shot, or on demand for selected images, via its built-in FTP-transfer feature. This app runs that FTP server - [lib/ftp_server.py](../lib/ftp_server.py), built on [pyftpdlib](https://pyftpdlib.readthedocs.io/) - and shows each upload as it arrives, using the same review/print/publish/voice-edit flow as camera mode's Play mode (see [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md)).
 
 ## Configuring the app
 
-The `"ftp"` block in [settings.json](../settings.json):
+The `"ftp"` block in [settings.json](../settings.json.example):
 
 ```json
 "ftp": {
@@ -38,7 +38,7 @@ Sony's FTP client may create a dated subfolder (e.g. `2026_07_28`) under the ser
 2. Otherwise moves it into `captures/` (flat, no subfolders) with a lower-cased `.jpg` extension - cameras write e.g. `DSC01234.JPG`, and the shared review code globs `*.jpg`, which is case-sensitive on Linux; without lower-casing, uploaded photos would silently never appear.
 3. Renames on collision (`_2`, `_3`, ...) rather than overwriting, in the rare case two uploads produce the same filename (e.g. after the camera's internal file counter wraps around).
 
-The photo then becomes the current selection on screen immediately - see [When a new photo arrives](reviewing-photos.md#when-a-new-photo-arrives).
+The photo then becomes the current selection on screen immediately - see [When a new photo arrives](home-screen-modes.md#when-a-new-photo-arrives).
 
 ## Testing without a camera
 

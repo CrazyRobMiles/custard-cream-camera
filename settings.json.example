@@ -1,4 +1,5 @@
 {
+    "mode": "camera",
     "display": {
         "type": "hdmi-desktop",
         "width": 800,
@@ -22,11 +23,38 @@
         "channels": 1,
         "max_record_seconds": 15,
         "result_hold_seconds": 4,
-        "device": "plughw:3,0",
+        "device": null,
         "timeout_seconds": 30,
         "vosk": {
             "model_path": "models/vosk-model-small-en-us-0.15"
         }
+    },
+    "camera": {
+        "hflip": false,
+        "vflip": false
+    },
+    "exposure": {
+        "default": 0.0,
+        "step": 0.5,
+        "min": -2.0,
+        "max": 2.0
+    },
+    "shutter_remote": {
+        "enabled": false,
+        "photo_key": "KEY_VOLUMEUP",
+        "speak_key": "KEY_ENTER",
+        "device_name": "AB Shutter3",
+        "grab": true
+    },
+    "serial_remote": {
+        "enabled": false,
+        "port": "/dev/ttyUSB0",
+        "baud_rate": 115200
+    },
+    "audio_output": {
+        "enabled": true,
+        "device": null,
+        "shutter_sound": "assets/audio/shutter.wav"
     },
     "ftp": {
         "host": "0.0.0.0",
@@ -36,7 +64,7 @@
         "incoming_dir": "ftp_incoming"
     },
     "printing": {
-        "printer": "SELPHY_CP400",
+        "printer": null,
         "test_mode": false,
         "test_folder": "print_tests",
         "job_timeout_seconds": 120

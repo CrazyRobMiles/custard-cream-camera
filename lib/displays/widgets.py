@@ -134,6 +134,7 @@ class ButtonPanel:
     def __init__(self):
         self.buttons = []
         self._switched_at = 0.0
+        self._pressed_button = None
 
     def set_buttons(self, buttons):
         for button in self.buttons:
@@ -142,6 +143,7 @@ class ButtonPanel:
         for button in self.buttons:
             button.enable()
         self._switched_at = time.monotonic()
+        self._pressed_button = None
 
     def draw(self, draw):
         for button in self.buttons:
@@ -153,9 +155,18 @@ class ButtonPanel:
         for button in self.buttons:
             if button.check_coord(x, y):
                 button.set_down()
+                self._pressed_button = button
 
     def release(self, x, y):
         if time.monotonic() - self._switched_at < self.SWITCH_GUARD_SECONDS:
+            return
+        # A finger pressing a button can drift outside its bounds before lifting
+        # (touchscreens especially), so the release must go to whichever button is
+        # currently pressed rather than whatever happens to be under the release
+        # coordinate - otherwise the press is left stuck "down" forever.
+        if self._pressed_button is not None:
+            self._pressed_button.set_up()
+            self._pressed_button = None
             return
         for button in self.buttons:
             if button.check_coord(x, y):

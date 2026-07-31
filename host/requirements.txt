@@ -1,0 +1,10 @@
+pillow
+pygame
+google-genai
+vosk
+flickrapi
+atproto
+requests
+qrcode
+pycups
+pyftpdlib

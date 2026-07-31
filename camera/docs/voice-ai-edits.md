@@ -10,10 +10,10 @@ This review step exists because speech recognition isn't perfect, and a misheard
 
 Transcription (turning your speech into the text prompt) is a **pluggable backend**, selected via `"transcribe_provider"` under `"custard_cream"` in [settings.json](../settings.json):
 
-- **`"vosk"` (the shipped default)** — runs entirely on the Pi via a local [Vosk](https://alphacephei.com/vosk/) model, no network round-trip. Since it recognises speech live, the transcript is displayed on screen as you talk, updating word by word while **Speak** is still held. Implemented in [transcription/vosk_transcriber.py](../transcription/vosk_transcriber.py).
-- **`"gemini"`** — sends the whole recording to Gemini once you release **Speak**, same as this feature originally worked. No live text — just the "Recording... release to send" banner until it's done. Implemented in [transcription/gemini_transcriber.py](../transcription/gemini_transcriber.py).
+- **`"vosk"` (the shipped default)** — runs entirely on the Pi via a local [Vosk](https://alphacephei.com/vosk/) model, no network round-trip. Since it recognises speech live, the transcript is displayed on screen as you talk, updating word by word while **Speak** is still held. Implemented in [lib/transcription/vosk_transcriber.py](../../lib/transcription/vosk_transcriber.py).
+- **`"gemini"`** — sends the whole recording to Gemini once you release **Speak**, same as this feature originally worked. No live text — just the "Recording... release to send" banner until it's done. Implemented in [lib/transcription/gemini_transcriber.py](../../lib/transcription/gemini_transcriber.py).
 
-Both backends implement the same interface ([transcription/base.py](../transcription/base.py)), selected by [transcription/__init__.py](../transcription/__init__.py)'s `create_transcriber()` — the same plugin pattern used for [publishers](../publishers/) and [displays](../displays/). Image editing itself is unaffected by this choice and stays in [NanoBananaClient.py](../NanoBananaClient.py).
+Both backends implement the same interface ([lib/transcription/base.py](../../lib/transcription/base.py)), selected by [lib/transcription/__init__.py](../../lib/transcription/__init__.py)'s `create_transcriber()` — the same plugin pattern used for [publishers](../../lib/publishers/) and [displays](../../lib/displays/). Image editing itself is unaffected by this choice and stays in [lib/NanoBananaClient.py](../../lib/NanoBananaClient.py). The whole flow (`start_voice_prompt()`/`finish_voice_prompt()`/`review_ai_prompt()`/`run_ai_edit()`/...) lives in [lib/review_station.py](../../lib/review_station.py), shared with the [host app](../../host/).
 
 ## Setup
 

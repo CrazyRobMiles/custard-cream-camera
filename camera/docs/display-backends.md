@@ -1,9 +1,9 @@
 # Display Backends
 
-`custard_cream_camera.py` renders through a pluggable display layer in [displays/](../displays/). Two backends are provided, both for devices with a native HDMI display — a SPI panel backend (`ili9486`) used to be supported but was dropped: its framerate was too low to manually focus the camera image, making it non-viable as a platform regardless of anything else:
+`custard_cream_camera.py` renders through a pluggable display layer in [lib/displays/](../../lib/displays/) (shared with the [host app](../../host/)). Two backends are provided, both for devices with a native HDMI display — a SPI panel backend (`ili9486`) used to be supported but was dropped: its framerate was too low to manually focus the camera image, making it non-viable as a platform regardless of anything else:
 
-* `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([displays/hdmi_desktop_display.py](../displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app. This is the simplest option and the one to try first.
-* `hdmi-pygame` — a dedicated fullscreen SDL/pygame surface, using the mouse for touch input ([displays/hdmi_pygame_display.py](../displays/hdmi_pygame_display.py)). Bypasses the desktop's window manager for lower-overhead fullscreen updates, at the cost of needing a working SDL video driver for your setup — reach for this only if `hdmi-desktop`'s performance isn't enough.
+* `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([lib/displays/hdmi_desktop_display.py](../../lib/displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app. This is the simplest option and the one to try first.
+* `hdmi-pygame` — a dedicated fullscreen SDL/pygame surface, using the mouse for touch input ([lib/displays/hdmi_pygame_display.py](../../lib/displays/hdmi_pygame_display.py)). Bypasses the desktop's window manager for lower-overhead fullscreen updates, at the cost of needing a working SDL video driver for your setup — reach for this only if `hdmi-desktop`'s performance isn't enough.
 
 Select the backend and tune its options in [settings.json](../settings.json):
 
@@ -33,7 +33,7 @@ A bigger canvas gives more room for on-screen text and controls (e.g. the AI-pro
 
 Both HDMI backends need `DISPLAY` (and ideally `XDG_RUNTIME_DIR`) set to reach the desktop session — normally automatic when logged into the Pi's own desktop, but **not** when launched from a plain SSH shell or a remote-dev tool's integrated terminal (e.g. VS Code Remote-SSH), which don't inherit those variables. Activating the Python venv doesn't set them either (it only touches `PATH`), so this can bite regardless of venv use.
 
-`displays/__init__.py` fills in a best-effort default for either one if it's missing — it looks for a real X11 socket under `/tmp/.X11-unix` and a real `/run/user/<uid>` directory, and only sets the variable if it finds one (it won't invent a display that doesn't actually exist), printing what it defaulted to. This should cover the common case of a single desktop session on `:0` without you needing to `export` anything by hand. If it still can't find one — e.g. no desktop session is running at all — the underlying error will still surface, since at that point there's genuinely nothing to connect to.
+`lib/displays/__init__.py` fills in a best-effort default for either one if it's missing — it looks for a real X11 socket under `/tmp/.X11-unix` and a real `/run/user/<uid>` directory, and only sets the variable if it finds one (it won't invent a display that doesn't actually exist), printing what it defaulted to. This should cover the common case of a single desktop session on `:0` without you needing to `export` anything by hand. If it still can't find one — e.g. no desktop session is running at all — the underlying error will still surface, since at that point there's genuinely nothing to connect to.
 
 ## Touch/clicks stop responding, but the cursor still moves
 

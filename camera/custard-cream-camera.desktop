@@ -2,7 +2,7 @@
 Type=Application
 Name=Custard Cream Camera
 Comment=Camera viewfinder with AI photo editing
-Exec=/home/rob/custard-cream-camera/run_custard_cream_camera.sh
+Exec=/home/rob/custard-cream-camera/camera/run_custard_cream_camera.sh
 Icon=camera-photo
 Terminal=false
 Categories=Utility;Photography;

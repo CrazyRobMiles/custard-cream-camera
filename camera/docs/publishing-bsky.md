@@ -1,6 +1,6 @@
 # Publishing to Bluesky
 
-The **Publish** button (in [Play mode](capture-and-play-modes.md)) opens a menu of every configured destination — tapping **Bluesky** there posts the currently displayed photo, using the [atproto](https://atproto.blue) package. This is a sibling of [flickr_publisher.py](../publishers/flickr_publisher.py) in the same pluggable [publishers/](../publishers/) layer — see [Publishing to Flickr](publishing-flickr.md) for the general shape.
+The **Publish** button (in [Play mode](capture-and-play-modes.md)) opens a menu of every configured destination — tapping **Bluesky** there posts the currently displayed photo, using the [atproto](https://atproto.blue) package. This is a sibling of [flickr_publisher.py](../../lib/publishers/flickr_publisher.py) in the same pluggable [lib/publishers/](../../lib/publishers/) layer (shared with the [host app](../../host/)) — see [Publishing to Flickr](publishing-flickr.md) for the general shape.
 
 ## One-time setup
 

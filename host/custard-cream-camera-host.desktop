@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Custard Cream Camera Host
+Comment=Receives photos over FTP and previews/prints/publishes/AI-edits them
+Exec=/home/rob/custard-cream-camera/host/run_custard_cream_camera_host.sh
+Icon=camera-photo
+Terminal=false
+Categories=Utility;Photography;

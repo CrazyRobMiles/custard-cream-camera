@@ -25,7 +25,7 @@ sudo apt install -y \
 
 ## Creating the Virtual Environment
 
-From the root of the repository:
+From this app's own folder (`camera/` - the [host app](../../host/) has its own separate venv, see `host/docs/venv-setup.md`):
 
 ```bash
 python3 -m venv --system-site-packages venv
@@ -63,7 +63,7 @@ These packages are installed into the virtual environment and do not affect the 
 Unlike the Python package, the **speech model itself is not installed by pip** — it's a separate download you place on disk yourself:
 
 ```bash
-cd ~/my-project   # repository root
+cd ~/custard-cream-camera/camera
 mkdir -p models
 curl -LO https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
 unzip vosk-model-small-en-us-0.15.zip -d models

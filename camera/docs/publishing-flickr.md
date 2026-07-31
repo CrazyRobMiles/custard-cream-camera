@@ -1,6 +1,6 @@
 # Publishing to Flickr
 
-The **Publish** button (in [Play mode](capture-and-play-modes.md)) opens a menu of every configured destination — tapping **Flickr** there uploads the currently displayed photo, tagged with whatever's configured in `settings.json`. This is built as a pluggable layer in [publishers/](../publishers/) — the same shape as [displays/](../displays/). [Bluesky](publishing-bsky.md) is already a sibling of `flickr_publisher.py`, alongside the self-hosted Custard Cream Server backend; other services (Instagram, whatever) could be added the same way, without touching `custard_cream_camera.py` beyond a new branch in `publishers/create_publisher()` and an entry in `PUBLISHER_LABELS`.
+The **Publish** button (in [Play mode](capture-and-play-modes.md)) opens a menu of every configured destination — tapping **Flickr** there uploads the currently displayed photo, tagged with whatever's configured in `settings.json`. This is built as a pluggable layer in [lib/publishers/](../../lib/publishers/) — the same shape as [lib/displays/](../../lib/displays/) — and shared unchanged with the [host app](../../host/). [Bluesky](publishing-bsky.md) is already a sibling of `flickr_publisher.py`, alongside the self-hosted Custard Cream Server backend; other services (Instagram, whatever) could be added the same way, without touching `custard_cream_camera.py` beyond a new branch in `publishers/create_publisher()` and an entry in `PUBLISHER_LABELS`.
 
 ## One-time setup
 

@@ -1,8 +1,9 @@
-__pycache__
-venv/
-.env/
-models/
-captures/
-print_tests/
-custard_cream_camera.log
-secrets.sh
+**/__pycache__/
+**/venv/
+**/.env/
+**/models/
+**/captures/
+**/print_tests/
+**/*.log
+**/secrets.sh
+host/ftp_incoming/

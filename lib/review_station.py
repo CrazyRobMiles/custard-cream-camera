@@ -8,7 +8,7 @@ from threading import Event, Thread
 
 import cups
 import qrcode
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 from displays import Button
 from NanoBananaClient import CustardCreamClient
@@ -339,7 +339,7 @@ class ReviewStationMixin:
 
         path = self.play_images[self.play_index]
         try:
-            self.play_view = Image.open(path).convert("RGB").resize((self.screen.WIDTH, self.screen.HEIGHT))
+            self.play_view = self._place_in_frame(Image.open(path).convert("RGB"))
         except Exception as e:
             print(f"Could not load {path}: {e}")
             self.play_view = self.status_frame("Could not load photo")
@@ -556,6 +556,23 @@ class ReviewStationMixin:
             buttons.append(Button(x, y, button_width, height, text, font, text_colour, back_colour, up_handler, down_handler))
             x += button_width + gap
         return tuple(buttons)
+
+    def _place_in_frame(self, img):
+        """Fits img (preserving aspect ratio) into the content area above the bottom button bar
+        (self.screen.WIDTH x self.content_height), centered on a black self.screen.WIDTH x
+        self.screen.HEIGHT canvas. Used for anything shown full-screen (the live viewfinder,
+        Play-mode photos, AI-edit results) so a source image whose aspect ratio doesn't match the
+        screen's - e.g. 4:3 stills on a wider display - gets letterboxed/pillarboxed instead of
+        stretched, and stays correct across different display.width/height configs.
+        """
+        fitted = ImageOps.contain(img, (self.screen.WIDTH, self.content_height))
+        canvas = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (0, 0, 0))
+        offset = (
+            (self.screen.WIDTH - fitted.width) // 2,
+            (self.content_height - fitted.height) // 2,
+        )
+        canvas.paste(fitted, offset)
+        return canvas
 
     def status_frame(self, text, font=None):
         """A short status banner over the current backdrop. Word-wraps to as many lines as
@@ -995,7 +1012,7 @@ class ReviewStationMixin:
             self.ai_prompts_by_path[out_path] = prompt_text
             print(f"Saved {out_path} (prompt: {prompt_text!r})")
 
-            result_img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((self.screen.WIDTH, self.screen.HEIGHT))
+            result_img = self._place_in_frame(Image.open(io.BytesIO(image_bytes)).convert("RGB"))
             self.show_result(result_img, hold_seconds=self.custard_cream_settings.get("result_hold_seconds", 4))
 
             if came_from_play:

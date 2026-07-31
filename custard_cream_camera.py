@@ -103,6 +103,11 @@ class CustardCreamCamera(ReviewStationMixin):
 
         button_y = self.screen.HEIGHT - 50
         arrow_y = 40 + (self.screen.HEIGHT - 40 - 50 - 100) // 2
+        # Height of the area actually visible above the bottom Capture/Play button row - the
+        # live preview is captured at exactly this size (see preview_config below) rather than
+        # the full screen height, so it fills that area edge-to-edge instead of being drawn
+        # full-screen and having its bottom strip hidden behind the opaque button bar.
+        self.content_height = button_y
 
         if self.has_camera:
             # picamera2/libcamera and the shutter-remote modules are only importable on a device
@@ -123,7 +128,7 @@ class CustardCreamCamera(ReviewStationMixin):
             )
 
             self.preview_config = self.picam2.create_preview_configuration(
-                main={"size": (self.screen.WIDTH, self.screen.HEIGHT), "format": "BGR888"},
+                main={"size": (self.screen.WIDTH, self.content_height), "format": "BGR888"},
                 transform=camera_transform,
             )
 
@@ -459,7 +464,7 @@ class CustardCreamCamera(ReviewStationMixin):
             parts.append(f"gain {gain:.2f}x")
 
         draw.text((frame.width // 2, 20), "  ".join(parts), font=self.small_font, fill=(255, 255, 0), anchor="mm")
-        return frame
+        return self._place_in_frame(frame)
 
     def request_next_frame(self):
         self.pending_job = self.picam2.capture_request(

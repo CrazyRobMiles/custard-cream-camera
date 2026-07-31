@@ -62,7 +62,12 @@ class Button:
 
     def do_up(self):
 
-        if not self.enabled:
+        # Gated on pressed, not enabled: a down_handler commonly switches to a new
+        # button panel (disabling this button) before the matching physical release
+        # arrives, often within the same update() tick. The button still owes this
+        # release to whoever pressed it, so completion must survive being disabled
+        # mid-press - only a button that was never actually pressed should no-op here.
+        if not self.pressed:
             return
 
         self.pressed = False
@@ -82,10 +87,6 @@ class Button:
             self.down_handler()
 
     def set_up(self):
-
-        if not self.enabled:
-            return
-
         self.touch_up_pending = True
 
     def set_down(self):
@@ -143,7 +144,10 @@ class ButtonPanel:
         for button in self.buttons:
             button.enable()
         self._switched_at = time.monotonic()
-        self._pressed_button = None
+        # self._pressed_button is deliberately left alone here: buttons in this app act on
+        # press (down_handler), so the handler that just ran often *is* what called
+        # set_buttons(), swapping this button out of self.buttons before its own physical
+        # release has arrived. It still owes that button its release.
 
     def draw(self, draw):
         for button in self.buttons:
@@ -158,15 +162,16 @@ class ButtonPanel:
                 self._pressed_button = button
 
     def release(self, x, y):
-        if time.monotonic() - self._switched_at < self.SWITCH_GUARD_SECONDS:
-            return
-        # A finger pressing a button can drift outside its bounds before lifting
-        # (touchscreens especially), so the release must go to whichever button is
-        # currently pressed rather than whatever happens to be under the release
-        # coordinate - otherwise the press is left stuck "down" forever.
+        # A finger pressing a button can drift outside its bounds before lifting, and/or
+        # the button's own down_handler may have already swapped in a new panel - either
+        # way the release belongs to whichever button is tracked as pressed, not whatever
+        # is now under the release coordinate. This must bypass the switch guard below:
+        # that guard exists for stray/untracked touches landing on the new panel, not for
+        # the very button whose press caused the switch.
         if self._pressed_button is not None:
             self._pressed_button.set_up()
-            self._pressed_button = None
+            return
+        if time.monotonic() - self._switched_at < self.SWITCH_GUARD_SECONDS:
             return
         for button in self.buttons:
             if button.check_coord(x, y):
@@ -174,7 +179,21 @@ class ButtonPanel:
 
     def update(self):
         dirty = False
+        seen = set()
         for button in self.buttons:
+            seen.add(id(button))
             if button.update():
                 dirty = True
+
+        # The pressed button may have been dropped from self.buttons by a panel switch
+        # before its release was drained above (see set_buttons()) - give it a chance too,
+        # so the touch_up_pending set by release() doesn't sit forever unprocessed.
+        pressed = self._pressed_button
+        if pressed is not None and id(pressed) not in seen:
+            if pressed.update():
+                dirty = True
+
+        if pressed is not None and not pressed.pressed and not pressed.touch_down_pending and not pressed.touch_up_pending:
+            self._pressed_button = None
+
         return dirty

@@ -153,19 +153,33 @@ class CustardCreamCamera(ReviewStationMixin):
                 vflip=camera_settings.get("vflip", False),
             )
 
-            # Both capture sizes are fit to self.print_aspect (not the sensor's native 4:3, not
-            # the screen's own aspect) within the largest box available - the sensor's full
-            # resolution for stills, the on-screen content area for the live preview - so the
-            # live framing always matches what actually gets printed. _place_in_frame() (see
-            # lib/review_station.py) handles centering/letterboxing either one on screen.
+            # An explicit optical crop to self.print_aspect, centered in the sensor's full pixel
+            # array - deliberately not just requesting an output "size" of that aspect ratio and
+            # trusting the ISP to crop for us: without ScalerCrop, a main-stream size narrower
+            # than the sensor mode's own aspect ratio gets the whole field of view non-uniformly
+            # squeezed to fit instead of cropped, distorting the image (visible on stills; the
+            # live preview only "looked fine" because the same squeeze is subtler on a small,
+            # moving image). Reading sensor_resolution rather than hardcoding it also means this
+            # keeps working if the camera module itself changes, not just the printer.
+            sensor_w, sensor_h = self.picam2.sensor_resolution
+            crop_w, crop_h = _largest_size_with_aspect(sensor_w, sensor_h, self.print_aspect)
+            self.print_crop = ((sensor_w - crop_w) // 2, (sensor_h - crop_h) // 2, crop_w, crop_h)
+
+            # Both capture sizes are fit within the largest box available - the full crop for
+            # stills, the on-screen content area for the live preview - and since the crop is
+            # already at print_aspect, the ISP's scale down to either output size is always
+            # uniform. _place_in_frame() (see lib/review_station.py) handles centering/
+            # letterboxing either one on screen.
             self.preview_config = self.picam2.create_preview_configuration(
                 main={"size": _largest_size_with_aspect(self.screen.WIDTH, self.content_height, self.print_aspect), "format": "BGR888"},
                 transform=camera_transform,
+                controls={"ScalerCrop": self.print_crop},
             )
 
             self.still_config = self.picam2.create_still_configuration(
-                main={"size": _largest_size_with_aspect(4056, 3040, self.print_aspect), "format": "BGR888"},
+                main={"size": (crop_w, crop_h), "format": "BGR888"},
                 transform=camera_transform,
+                controls={"ScalerCrop": self.print_crop},
             )
 
             self.picam2.configure(self.preview_config)

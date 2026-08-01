@@ -26,6 +26,22 @@ def load_settings():
         return json.load(f)
 
 
+def _largest_size_with_aspect(max_width, max_height, aspect):
+    """The largest (width, height) with the given width/height aspect ratio that fits within
+    max_width x max_height, rounded down to even dimensions (some capture formats require it).
+    Used to size both the still capture and the live preview from the printed aspect ratio
+    (settings["printing"]) rather than the sensor's native aspect or the screen's own aspect, so
+    the framing seen live always matches what actually gets printed - see self.print_aspect.
+    """
+    if max_width / max_height > aspect:
+        height = max_height
+        width = height * aspect
+    else:
+        width = max_width
+        height = width / aspect
+    return int(width) // 2 * 2, int(height) // 2 * 2
+
+
 # ------------------------------------------------------------
 # Keyboard handling (non-blocking)
 # ------------------------------------------------------------
@@ -70,6 +86,16 @@ class CustardCreamCamera(ReviewStationMixin):
         self.app_dir = Path(__file__).resolve().parent
         self.has_camera = settings.get("mode", "camera") == "camera"
 
+        # Read early - both the still and live-preview capture sizes below are derived from this
+        # (not the sensor's native aspect, not the screen's own aspect), so what's framed live
+        # always matches what actually comes out of the printer. Paper size is configurable
+        # rather than assuming this printer's 6x4in postcard size forever.
+        printing_settings = settings.get("printing", {})
+        self.printing_settings = printing_settings
+        self.print_aspect = (
+            printing_settings.get("paper_width_inches", 6) / printing_settings.get("paper_height_inches", 4)
+        )
+
         # Load three font sizes
         self.small_font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16
@@ -104,9 +130,9 @@ class CustardCreamCamera(ReviewStationMixin):
         button_y = self.screen.HEIGHT - 50
         arrow_y = 40 + (self.screen.HEIGHT - 40 - 50 - 100) // 2
         # Height of the area actually visible above the bottom Capture/Play button row - the
-        # live preview is captured at exactly this size (see preview_config below) rather than
-        # the full screen height, so it fills that area edge-to-edge instead of being drawn
-        # full-screen and having its bottom strip hidden behind the opaque button bar.
+        # live preview is fit within this area (see preview_config below) rather than the full
+        # screen height, so it's never drawn full-screen only to have its bottom strip hidden
+        # behind the opaque button bar.
         self.content_height = button_y
 
         if self.has_camera:
@@ -127,13 +153,18 @@ class CustardCreamCamera(ReviewStationMixin):
                 vflip=camera_settings.get("vflip", False),
             )
 
+            # Both capture sizes are fit to self.print_aspect (not the sensor's native 4:3, not
+            # the screen's own aspect) within the largest box available - the sensor's full
+            # resolution for stills, the on-screen content area for the live preview - so the
+            # live framing always matches what actually gets printed. _place_in_frame() (see
+            # lib/review_station.py) handles centering/letterboxing either one on screen.
             self.preview_config = self.picam2.create_preview_configuration(
-                main={"size": (self.screen.WIDTH, self.content_height), "format": "BGR888"},
+                main={"size": _largest_size_with_aspect(self.screen.WIDTH, self.content_height, self.print_aspect), "format": "BGR888"},
                 transform=camera_transform,
             )
 
             self.still_config = self.picam2.create_still_configuration(
-                main={"size": (4056, 3040), "format": "BGR888"},
+                main={"size": _largest_size_with_aspect(4056, 3040, self.print_aspect), "format": "BGR888"},
                 transform=camera_transform,
             )
 
@@ -210,8 +241,6 @@ class CustardCreamCamera(ReviewStationMixin):
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
 
-        printing_settings = settings.get("printing", {})
-        self.printing_settings = printing_settings
         self.printer_name = printing_settings.get("printer")
         self.print_test_mode = printing_settings.get("test_mode", False)
         self.print_test_dir = Path(printing_settings.get("test_folder", "print_tests"))

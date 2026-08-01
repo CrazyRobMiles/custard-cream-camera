@@ -20,10 +20,12 @@ To install it:
    cp custard-cream-camera.desktop ~/Desktop/
    cp custard-cream-camera.desktop ~/.local/share/applications/   # to also show it in the app menu
    ```
-3. Most file managers treat a newly-placed `.desktop` file as untrusted the first time — right-click the icon and choose "Allow Launching" / "Trust" (wording varies by desktop environment), or mark it executable if it isn't already:
+3. Make sure both `run_custard_cream_camera.sh` and the `.desktop` file are executable — git doesn't reliably preserve the executable bit across clones, so a fresh clone can silently lack it, which shows up as the icon failing to launch (PCManFM reports this as "Invalid desktop entry file", which is misleading — the underlying cause is `Permission denied` running the script):
    ```bash
+   chmod +x ~/custard-cream-camera/run_custard_cream_camera.sh
    chmod +x ~/Desktop/custard-cream-camera.desktop
    ```
+   Most file managers also treat a newly-placed `.desktop` file as untrusted the first time — right-click the icon and choose "Allow Launching" / "Trust" (wording varies by desktop environment).
    On Raspberry Pi OS's default file manager, PCManFM, double-clicking instead pops up an "Execute / Execute in Terminal / Open / Cancel" menu every time, even once the file is executable - this isn't the same "untrusted" mechanism GNOME/Nautilus uses (so `gio set metadata::trusted` has no effect here), it's a PCManFM-only setting. Fix it via **File Manager → Edit → Preferences → General → "Don't ask options on launch executable file"**. This writes `quick_exec=1` to PCManFM's own config file - editing that file directly isn't a reliable alternative, since it may not exist yet until PCManFM has been opened/configured at least once. Note this is a global toggle: it suppresses the confirmation for any executable double-clicked on the desktop, not just this icon.
 
 ## What you'll see on launch

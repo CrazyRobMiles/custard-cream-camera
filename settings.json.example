@@ -24,6 +24,16 @@
             "model_path": "models/vosk-model-small-en-us-0.15"
         }
     },
+    "ai_edit": {
+        "enabled": true,
+        "input_method": "voice",
+        "presets": [
+            "Make it look like a watercolor painting",
+            "Turn it into a black-and-white film noir photo",
+            "Add a retro polaroid-style border",
+            "Make it look like a comic book illustration"
+        ]
+    },
     "camera": {
         "hflip": false,
         "vflip": false

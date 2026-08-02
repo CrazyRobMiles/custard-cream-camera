@@ -1,5 +1,15 @@
 # Voice-Prompted AI Edits
 
+How you provide the editing instruction is controlled by `"input_method"` under `"ai_edit"` in
+[settings.json](../settings.json.example) — `"voice"` (the default, described first below) or
+`"keyboard"` (preset prompts plus a custom on-screen keyboard entry, see
+[Keyboard/Preset Input](#keyboardpreset-input) further down). Setting `"ai_edit.enabled"` to
+`false` removes AI editing entirely — no button in Play mode, and (camera mode) no shutter-remote
+speak-key binding either — useful for a device that only needs to receive/print/publish photos,
+e.g. a low-spec Pi Zero-class image receiver.
+
+## Voice input (`ai_edit.input_method`: `"voice"`, the default)
+
 In Play mode (see [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md)), hold **Speak** (or, in camera mode, use the shutter remote's speak key, which works from any mode), say an editing instruction (e.g. "make it look like a watercolor painting"), and release. The app transcribes what you said, then shows you the transcript with three options before anything is sent anywhere for editing:
 
 * **Send** — sends it, with the currently displayed image, to Google's Gemini ("Nano Banana") image model for editing.
@@ -8,7 +18,7 @@ In Play mode (see [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md)),
 
 This review step exists because speech recognition isn't perfect, and a misheard instruction sent straight to an image-editing model wastes a request (and, depending on your Gemini plan, a quota unit) on a result you never wanted. Once sent, the result is saved to `captures/` as `ai_<timestamp>.jpg`, shown on screen for a few seconds, and becomes the new current selection. Image editing always goes through Gemini; the app stays responsive while it's working since the network calls run on a background thread.
 
-Transcription (turning your speech into the text prompt) is a **pluggable backend**, selected via `"transcribe_provider"` under `"custard_cream"` in [settings.json](../settings.json.example):
+Transcription (turning your speech into the text prompt) is a **pluggable backend**, selected via `"transcribe_provider"` under `"custard_cream"` in [settings.json](../settings.json.example) — this setting only matters when `"ai_edit.input_method"` is `"voice"`:
 
 - **`"vosk"` (the shipped default)** — runs entirely on the device via a local [Vosk](https://alphacephei.com/vosk/) model, no network round-trip. Since it recognises speech live, the transcript is displayed on screen as you talk, updating word by word while **Speak** is still held. Implemented in [lib/transcription/vosk_transcriber.py](../lib/transcription/vosk_transcriber.py).
 - **`"gemini"`** — sends the whole recording to Gemini once you release **Speak**. No live text — just the "Recording... release to send" banner until it's done. Implemented in [lib/transcription/gemini_transcriber.py](../lib/transcription/gemini_transcriber.py).
@@ -17,7 +27,32 @@ Both backends implement the same interface ([lib/transcription/base.py](../lib/t
 
 On a lower-powered device (e.g. a Pi Zero W 2 running in FTP mode), consider `"vosk"` over `"gemini"` for transcription if the network connection is unreliable, since it needs no round-trip at all - though the image-edit step itself always needs Gemini regardless.
 
+## Keyboard/Preset Input
+
+Set `"ai_edit.input_method"` to `"keyboard"` for a device with no microphone, or where speech
+recognition simply isn't wanted (e.g. a low-spec Pi Zero-class image receiver/printer, where a
+local Vosk model is too much for the hardware - see below). The Play-mode button becomes **AI
+Edit** (a normal tap, not hold-to-talk) instead of **Speak**:
+
+* Tapping it shows a grid of the prompts configured under `"ai_edit.presets"` in settings.json (any
+  number, not just four - laid out two per row), plus **Custom...** and **Back**.
+* Picking a preset, or **Custom...** (which opens the same on-screen keyboard **Edit** uses in the
+  voice flow above, starting blank), lands on the same Send/Reject/Edit confirm screen described
+  above - so a preset or typed prompt can still be tweaked or rejected before it's sent to Gemini.
+* **Back** returns to Play mode without choosing anything.
+
+Crucially, no transcriber is created at all in this mode (nor when `"ai_edit.enabled"` is
+`false`): `"transcribe_provider"`/`"vosk"` in settings.json are simply not read, the `vosk` package
+is never imported, and no Vosk model is loaded into memory - important on something like a Pi Zero,
+where even a "small" ~40MB model is a real cost you don't want to pay if voice input is never used.
+In camera mode, the shutter remote's speak key is also left unbound in this case, since it exists
+purely to drive hold-to-talk.
+
 ## Setup
+
+Steps 1 and 3 (the Gemini API key) apply regardless of `"ai_edit.input_method"`, since image
+editing always goes through Gemini. Steps 2, 4, and 5 only matter for `"input_method": "voice"` —
+skip them entirely for `"keyboard"` (or `"ai_edit.enabled": false`).
 
 1. **Get a Gemini API key.** Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey), sign in with a Google account, and create a key. This is needed for image editing regardless of transcription backend, and for transcription itself if you use `"gemini"`.
 

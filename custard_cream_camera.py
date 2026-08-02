@@ -125,6 +125,15 @@ class CustardCreamCamera(ReviewStationMixin):
 
         self.audio_output_settings = settings.get("audio_output", {})
 
+        # AI-edit input: "voice" (hold-to-talk + a transcriber) or "keyboard" (tap, pick a preset
+        # prompt or type a custom one) - or disabled entirely. Read early since it decides what
+        # the play menu's Speak/AI Edit button looks like (_build_play_menu() below) and whether
+        # a transcriber is created at all further down.
+        ai_edit_settings = settings.get("ai_edit", {})
+        self.ai_edit_settings = ai_edit_settings
+        self.ai_edit_enabled = ai_edit_settings.get("enabled", True)
+        self.ai_input_method = ai_edit_settings.get("input_method", "voice")
+
         self.kbd = Keyboard()
 
         button_y = self.screen.HEIGHT - 50
@@ -209,7 +218,7 @@ class CustardCreamCamera(ReviewStationMixin):
 
             # Capture mode: live viewfinder, take a photo or switch to Play mode to review/act on
             # existing ones. There's no on-screen quit button any more - use keyboard 'q', or
-            # Escape/window-close on the HDMI backends.
+            # Escape/window-close on the  MI backends.
             self.capture_menu = (
                 *self._row_of_buttons(button_y, 50, (
                     ("Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
@@ -220,37 +229,17 @@ class CustardCreamCamera(ReviewStationMixin):
                 Button(self.screen.WIDTH - 50, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
             )
 
-            # Play mode: reviews/acts on captures/ directly - Print/Speak/Publish always target
-            # whatever's currently selected (self.play_index), no separate "choose, then act" step.
-            # Left/Right step through images one at a time; Page opens a 3x3 grid to jump further.
-            self.play_menu = (
-                *self._row_of_buttons(button_y, 50, (
-                    ("Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
-                    ("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
-                    ("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt),
-                    ("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
-                )),
-                Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
-                Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
-                Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
-                Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
-            )
+            # Play mode: reviews/acts on captures/ directly - Print/Speak or AI Edit/Publish
+            # always target whatever's currently selected (self.play_index), no separate
+            # "choose, then act" step. Left/Right step through images one at a time; Page opens
+            # a 3x3 grid to jump further.
+            self.play_menu = self._build_play_menu(button_y, arrow_y)
 
             self.screen.set_buttons(self.capture_menu)
         else:
             # No "Capture" button - there's no other mode to switch to, since this app never
             # captures anything itself in FTP mode.
-            self.play_menu = (
-                *self._row_of_buttons(button_y, 50, (
-                    ("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print),
-                    ("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt),
-                    ("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu),
-                )),
-                Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
-                Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
-                Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
-                Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
-            )
+            self.play_menu = self._build_play_menu(button_y, arrow_y)
 
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
@@ -305,7 +294,13 @@ class CustardCreamCamera(ReviewStationMixin):
         custard_cream_settings = settings.get("custard_cream", {})
         self.custard_cream_settings = custard_cream_settings
         self.custard_cream_client = None
-        self.transcriber = create_transcriber(settings, self.get_custard_cream_client)
+        # Only created for the "voice" input method - create_transcriber() (see
+        # lib/transcription/__init__.py) imports and eagerly loads a local Vosk model when
+        # "transcribe_provider" is "vosk", a real cost not worth paying on a device that never
+        # uses voice input at all (e.g. a low-spec keyboard/preset-only image receiver).
+        self.transcriber = None
+        if self.ai_edit_enabled and self.ai_input_method == "voice":
+            self.transcriber = create_transcriber(settings, self.get_custard_cream_client)
         self.ai_pending = False
         self.ai_done = Event()
         self.ai_result = None
@@ -328,6 +323,15 @@ class CustardCreamCamera(ReviewStationMixin):
         self.voice_recording = False
         self.voice_partial_text = None
         self.voice_partial_ready = Event()
+
+        # "AI Edit" button (ai_edit.input_method == "keyboard") - the picker screen's own button
+        # handlers only set these (see show_ai_prompt_picker() in lib/review_station.py) rather
+        # than entering the blocking confirm/edit screens directly, since those handlers run from
+        # inside ButtonPanel.update()/self.screen.update() - process_frame() picks the choice up
+        # on a later tick instead, the same pattern ai_transcribe_done/ai_done use below.
+        self.ai_prompt_choice_text = None
+        self.ai_prompt_choice_is_custom = False
+        self.ai_prompt_choice_ready = Event()
 
         # Publishing ("Publish" button) - pluggable, see publishers/. All configured destinations
         # are active at once; Publish opens a menu to choose which one this photo goes to, one at
@@ -365,7 +369,9 @@ class CustardCreamCamera(ReviewStationMixin):
                 speak_key = remote_settings.get("speak_key", "KEY_ENTER")
                 if photo_key:
                     bindings[photo_key] = (self.remote_photo_requested.set, None)
-                if speak_key:
+                # Only wired for the "voice" input method - it drives hold-to-talk, which is
+                # meaningless (and self.transcriber is None) for "keyboard" or a disabled ai_edit.
+                if speak_key and self.ai_edit_enabled and self.ai_input_method == "voice":
                     bindings[speak_key] = (self.remote_speak_down.set, self.remote_speak_up.set)
 
                 self.shutter_remote = ShutterRemote(
@@ -397,6 +403,32 @@ class CustardCreamCamera(ReviewStationMixin):
             # Picks up anything already in save_dir (e.g. left over from a previous run) and shows
             # the newest, or the "waiting for photos" placeholder if there's nothing yet.
             self.enter_play()
+
+    def _build_play_menu(self, button_y, arrow_y):
+        """Play mode's button row plus the Stop/Page corner buttons and </>edge buttons - shared
+        between camera mode (Capture button included) and FTP mode (no Capture, nothing else to
+        switch to). Branches on ai_edit settings for the third button: hold-to-talk "Speak" for
+        the "voice" input method, a tap-to-open-picker "AI Edit" for "keyboard", or omitted
+        entirely when ai_edit.enabled is false.
+        """
+        specs = []
+        if self.has_camera:
+            specs.append(("Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture))
+        specs.append(("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print))
+        if self.ai_edit_enabled:
+            if self.ai_input_method == "voice":
+                specs.append(("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt))
+            else:
+                specs.append(("AI Edit", self.play_button_font, (255, 255, 255), (0, 110, 0), None, self.show_ai_prompt_picker))
+        specs.append(("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu))
+
+        return (
+            *self._row_of_buttons(button_y, 50, specs),
+            Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
+            Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
+            Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
+            Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
+        )
 
     # ------------------------------------------------------------
     # ReviewStationMixin hooks - the only mode-specific seams in the shared Play/Publish/Speak/
@@ -575,6 +607,11 @@ class CustardCreamCamera(ReviewStationMixin):
 
         if self.print_status_ready.is_set():
             self.print_status_ready.clear()
+            dirty = True
+
+        if self.ai_prompt_choice_ready.is_set():
+            self.ai_prompt_choice_ready.clear()
+            self.handle_ai_prompt_choice()
             dirty = True
 
         if self.ai_pending and self.ai_transcribe_done.is_set():

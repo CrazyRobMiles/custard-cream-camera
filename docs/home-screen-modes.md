@@ -19,15 +19,17 @@ top corners.
 Reviews and acts on photos already in `captures/`, one at a time, full screen:
 
 * **Capture** — back to Capture mode (the live viewfinder), without taking a photo.
-* **Print** / **Speak** / **Publish** — act immediately on whichever photo is currently shown, no
-  separate "choose, then act" step. **Speak** is hold-to-talk: press to record an editing
-  instruction, release to send it, exactly like Capture mode's old Speak button but targeting the
-  photo on screen instead of a fresh capture. **Publish** opens a menu of every *enabled*
-  destination (Flickr, Bluesky, Custard Cream Server, ...) — tap one to send this photo there and
-  return here, with a "Published to \<name\>!" confirmation naming which one; publishing to more
-  than one destination means pressing **Publish** again afterwards and picking another. If only one
-  destination is enabled, Publish skips the menu and sends straight to it. See
-  [Voice-Prompted AI Edits](voice-ai-edits.md), [Printing](printing.md), and
+* **Print** / **Speak or AI Edit** / **Publish** — act immediately on whichever photo is currently
+  shown, no separate "choose, then act" step. The AI-edit button's behavior depends on
+  `"ai_edit"` in settings.json: by default (`"input_method": "voice"`) it's **Speak**, hold-to-talk
+  — press to record an editing instruction, release to send it; with `"input_method": "keyboard"`
+  it's **AI Edit**, a normal tap that opens a grid of preset prompts plus a custom on-screen-keyboard
+  option instead. Setting `"ai_edit.enabled"` to `false` removes this button entirely. **Publish**
+  opens a menu of every *enabled* destination (Flickr, Bluesky, Custard Cream Server, ...) — tap one
+  to send this photo there and return here, with a "Published to \<name\>!" confirmation naming
+  which one; publishing to more than one destination means pressing **Publish** again afterwards and
+  picking another. If only one destination is enabled, Publish skips the menu and sends straight to
+  it. See [Voice-Prompted AI Edits](voice-ai-edits.md), [Printing](printing.md), and
   [Publishing to Flickr](publishing-flickr.md) for what each of those actually does.
 * **`<`** / **`>`** (small buttons on the left/right screen edges) — step to the previous/next
   photo one at a time, newest-first.

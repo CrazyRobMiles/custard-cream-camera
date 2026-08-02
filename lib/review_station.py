@@ -36,10 +36,12 @@ class ReviewStationMixin:
     A subclass must set up, in its own __init__, everything this mixin reads from self:
     settings, screen, app_dir, save_dir, the font set (small_font/medium_font/large_font/
     play_button_font/phrase_font), play_menu, mode/play_images/play_index/play_page/play_view,
-    ai_prompts_by_path, the AI-edit Event/flag set, custard_cream_settings/custard_cream_client/
-    transcriber, the publish Event/flag set + publishers cache dict, the print Event/flag set +
-    printer_name/printing_settings/print_test_mode/print_test_dir, watermark_settings/
-    datestamp_settings, audio_output_settings, running, and last_photo_path.
+    ai_prompts_by_path, the AI-edit Event/flag set, ai_edit_settings/ai_prompt_choice_text/
+    ai_prompt_choice_is_custom/ai_prompt_choice_ready, custard_cream_settings/custard_cream_client/
+    transcriber (None unless ai_edit is enabled with input_method "voice"), the publish Event/flag
+    set + publishers cache dict, the print Event/flag set + printer_name/printing_settings/
+    print_test_mode/print_test_dir, watermark_settings/datestamp_settings, audio_output_settings,
+    running, and last_photo_path.
 
     Three seams let a camera-less subclass opt out of the only genuinely camera-specific bits:
     _capture_fresh_still(), _non_play_menu(), and _empty_play_buttons()/_empty_play_message().
@@ -670,6 +672,96 @@ class ReviewStationMixin:
         while self.running and not self.screen.quit_requested and not done_pressed.is_set():
             self.screen.update()
             time.sleep(0.05)
+
+    # ------------------------------------------------------------
+    # AI-edit prompt picker ("AI Edit" button, ai_edit.input_method == "keyboard")
+    # ------------------------------------------------------------
+
+    def _truncate_button_label(self, text, font, max_width):
+        """Ellipsis-truncates text to fit max_width when drawn in font. Button.draw() renders a
+        single line with no wrapping (unlike status_frame()/the prompt editor below), so a preset
+        prompt longer than its button needs shortening for display - the full, untruncated text
+        is still what's captured by the closure and sent as the edit instruction.
+        """
+        draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        if draw.textlength(text, font=font) <= max_width:
+            return text
+        while text and draw.textlength(text + "...", font=font) > max_width:
+            text = text[:-1]
+        return text + "..." if text else "..."
+
+    def show_ai_prompt_picker(self):
+        """"AI Edit" button in Play mode when ai_edit.input_method is "keyboard" - pick one of
+        the configured preset prompts, or enter a custom one via the existing on-screen keyboard,
+        instead of speaking it.
+
+        Non-blocking, the same shape as show_publish_menu(): button handlers here only ever set
+        ai_prompt_choice_ready (checked by process_frame(), see handle_ai_prompt_choice()) rather
+        than entering the blocking confirm/edit screens directly. That distinction matters -
+        every blocking review screen in this file (show_ai_confirm_screen, show_ai_edit_screen,
+        show_result_until_done, _prompt_and_send_ai_edit) is only ever entered from
+        process_frame()'s own body, never from inside a button's down_handler/up_handler: handlers
+        run from inside ButtonPanel.update(), itself called from self.screen.update() - entering a
+        blocking `while ...: self.screen.update()` loop from there would re-enter screen.update()
+        from inside itself.
+        """
+        if not self.play_images or self.ai_pending or self.print_pending:
+            return
+
+        # Normally set by finish_voice_prompt() - this input method bypasses that, so set it here.
+        self.ai_still_path = self.play_images[self.play_index]
+
+        presets = self.ai_edit_settings.get("presets", [])
+        button_y = self.screen.HEIGHT - 50
+        cols = 2
+        rows = max(1, -(-len(presets) // cols))  # ceil division
+        cell_w = self.screen.WIDTH // cols
+        cell_h = button_y // rows
+
+        preset_buttons = []
+        for i, text in enumerate(presets):
+            col, row = i % cols, i // cols
+            label = self._truncate_button_label(text, self.play_button_font, cell_w - 20)
+            preset_buttons.append(Button(
+                col * cell_w, row * cell_h, cell_w, cell_h, label, self.play_button_font,
+                (255, 255, 255), (60, 60, 90), None,
+                lambda text=text: self._choose_ai_prompt(text),
+            ))
+
+        nav_buttons = self._row_of_buttons(button_y, 50, (
+            ("Custom...", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self._choose_ai_prompt_custom),
+            ("Back", self.play_button_font, (255, 255, 255), (150, 30, 30), None, self.show_play_image),
+        ))
+
+        self.screen.set_buttons((*preset_buttons, *nav_buttons))
+        self.screen.draw(self.play_view)
+
+    def _choose_ai_prompt(self, text):
+        self.ai_prompt_choice_text = text
+        self.ai_prompt_choice_is_custom = False
+        self.ai_prompt_choice_ready.set()
+
+    def _choose_ai_prompt_custom(self):
+        self.ai_prompt_choice_is_custom = True
+        self.ai_prompt_choice_ready.set()
+
+    def handle_ai_prompt_choice(self):
+        """Runs on the main thread once process_frame() sees ai_prompt_choice_ready - safe to
+        block here (see show_ai_prompt_picker()'s docstring): the custom-entry keyboard and the
+        Send/Reject/Edit confirm screen it feeds into are only entered from this call depth.
+        """
+        is_custom = self.ai_prompt_choice_is_custom
+        text = self.ai_prompt_choice_text
+        self.ai_prompt_choice_text = None
+        self.ai_prompt_choice_is_custom = False
+
+        if is_custom:
+            text = self.show_ai_edit_screen("")
+            if not text:
+                self.show_play_image()
+                return
+
+        self._prompt_and_send_ai_edit(text, came_from_play=True)
 
     def start_voice_prompt(self):
         if self.ai_pending or self.print_pending:

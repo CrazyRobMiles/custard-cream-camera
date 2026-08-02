@@ -11,7 +11,7 @@ its own independent venv at its own clone of this repo — there's no environmen
 
 ## Why `picamera2` needs special handling (camera mode only)
 
-Almost every dependency (`pillow`, `numpy`, `pygame`) is a normal PyPI package and installs fine
+Almost every dependency (`pillow`, `numpy`) is a normal PyPI package and installs fine
 into any plain venv via `requirements.txt` — no apt packages needed for those.
 
 `picamera2` is the one exception, and it's only needed in camera mode. It's built on top of

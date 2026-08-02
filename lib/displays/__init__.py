@@ -39,16 +39,10 @@ def create_display(settings=None):
     display_settings = settings.get("display", {})
     display_type = display_settings.get("type", "hdmi-desktop")
     # Logical canvas size everything is drawn/laid out against - independent of the physical
-    # window/output size (see hdmi-pygame's window_width/window_height), and configurable so a
-    # bigger canvas (more room for on-screen text/keyboards) can be tried without committing to
-    # it if it costs too much frame rate.
+    # window/output size, and configurable so a bigger canvas (more room for on-screen
+    # text/keyboards) can be tried without committing to it if it costs too much frame rate.
     width = display_settings.get("width", 480)
     height = display_settings.get("height", 320)
-
-    if display_type == "hdmi-pygame":
-        _ensure_display_env()
-        from .hdmi_pygame_display import HDMIPygameDisplay
-        return HDMIPygameDisplay(width=width, height=height, **display_settings.get("hdmi-pygame", {}))
 
     if display_type == "hdmi-desktop":
         _ensure_display_env()

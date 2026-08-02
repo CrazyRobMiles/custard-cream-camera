@@ -1,9 +1,8 @@
 # Display Backends
 
-`custard_cream_camera.py` renders through a pluggable display layer in [lib/displays/](../lib/displays/). Two backends are provided, both for devices with a native HDMI display — a SPI panel backend (`ili9486`) used to be supported but was dropped: its framerate was too low to manually focus the camera image, making it non-viable as a platform regardless of anything else:
+`custard_cream_camera.py` renders through a pluggable display layer in [lib/displays/](../lib/displays/). One backend is provided, for devices with a native HDMI display — a SPI panel backend (`ili9486`) used to be supported but was dropped: its framerate was too low to manually focus the camera image, making it non-viable as a platform regardless of anything else. A dedicated fullscreen SDL/pygame backend (`hdmi-pygame`) was also dropped: `hdmi-desktop` turned out to be fast enough on its own, so there was no need to carry the extra SDL video-driver dependency and setup burden.
 
-* `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([lib/displays/hdmi_desktop_display.py](../lib/displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app. This is the simplest option and the one to try first.
-* `hdmi-pygame` — a dedicated fullscreen SDL/pygame surface, using the mouse for touch input ([lib/displays/hdmi_pygame_display.py](../lib/displays/hdmi_pygame_display.py)). Bypasses the desktop's window manager for lower-overhead fullscreen updates, at the cost of needing a working SDL video driver for your setup — reach for this only if `hdmi-desktop`'s performance isn't enough. Worth checking on a lower-powered device (e.g. a Pi Zero W 2 running in FTP mode), where the lower overhead may matter more than on a full-size Pi.
+* `hdmi-desktop` — a plain window via Tkinter, using the mouse for touch input ([lib/displays/hdmi_desktop_display.py](../lib/displays/hdmi_desktop_display.py)). No fullscreen mode-switching or video driver selection — it just opens an ordinary window through whatever windowing system the desktop is already using, the same as any other desktop app.
 
 Select the backend and tune its options in [settings.json](../settings.json.example):
 
@@ -25,7 +24,7 @@ sudo apt install python3-tk
 
 ## `width`/`height` — the logical canvas size
 
-Every screen (menus, the viewfinder or current photo, the on-screen keyboard) is drawn against a logical canvas of `width` x `height`, then scaled up to fill whatever the real window/output size is — so this is independent of `hdmi-pygame`'s own `window_width`/`window_height` (the *physical* SDL surface size). Defaults to `480`x`320` if omitted, matching the size this app originally shipped with.
+Every screen (menus, the viewfinder or current photo, the on-screen keyboard) is drawn against a logical canvas of `width` x `height`, then scaled up to fill whatever the real window/output size is. Defaults to `480`x`320` if omitted, matching the size this app originally shipped with.
 
 A bigger canvas gives more room for on-screen text and controls (e.g. the AI-prompt keyboard, see [Voice-Prompted AI Edits](voice-ai-edits.md)) at the cost of more pixels to draw per frame - worth watching on a lower-powered device (e.g. a Pi Zero W 2), which has much less headroom than a full-size Pi. If a larger size causes worse frame rates on your hardware, drop `width`/`height` back down (or remove them entirely to fall back to `480`x`320`) — no code change needed either way. Every layout in the app computes itself from these values at runtime rather than assuming a fixed size, so any resolution should work.
 

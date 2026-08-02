@@ -10,9 +10,8 @@ from .widgets import ButtonPanel
 class HDMIDesktopDisplay(BaseDisplay):
     """Displays frames in a window via Tkinter (fullscreen by default).
 
-    No SDL video driver selection - it just opens an ordinary window through whatever
-    windowing system the desktop is already using, the same as any other desktop app.
-    Simpler and more portable than HDMIPygameDisplay, at the cost of a little draw performance.
+    Just opens an ordinary window through whatever windowing system the desktop is already
+    using, the same as any other desktop app.
     """
 
     def __init__(self, fullscreen=True, scale=1, width=480, height=320):

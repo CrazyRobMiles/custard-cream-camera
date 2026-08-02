@@ -1,6 +1,5 @@
 pillow
 numpy
-pygame
 google-genai
 vosk
 evdev

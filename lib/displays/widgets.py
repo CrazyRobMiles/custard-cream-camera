@@ -177,10 +177,16 @@ class ButtonPanel:
         # is now under the release coordinate. This must bypass the switch guard below:
         # that guard exists for stray/untracked touches landing on the new panel, not for
         # the very button whose press caused the switch. Resolves the oldest outstanding
-        # press first, matching physical touches in the order they went down.
-        if self._pressed_buttons:
-            self._pressed_buttons.pop(0).set_up()
-            return
+        # press first, matching physical touches in the order they went down - marked here,
+        # not removed: it stays in _pressed_buttons until update() actually processes the
+        # pending flag and settles it (see update()'s cleanup), since a button dropped from
+        # self.buttons by the panel switch otherwise has nothing left to call its update()
+        # and fire do_up() - popping it here used to leave it stuck "pressed" until it
+        # happened to reappear in some later self.buttons (e.g. Back returning to play_menu).
+        for button in self._pressed_buttons:
+            if button.pressed and not button.touch_up_pending:
+                button.set_up()
+                return
         if time.monotonic() - self._switched_at < self.SWITCH_GUARD_SECONDS:
             return
         for button in self.buttons:

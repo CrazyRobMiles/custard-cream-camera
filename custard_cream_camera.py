@@ -155,11 +155,22 @@ class CustardCreamCamera(ReviewStationMixin):
             self.picam2 = Picamera2()
 
             # Corrects for the sensor being mounted rotated 180 degrees in this build - flip both
-            # axes rather than rotating every captured frame in software afterward.
+            # axes rather than rotating every captured frame in software afterward. Viewfinder and
+            # capture are transformed independently (each falling back to the top-level hflip/vflip
+            # when not overridden) so a traditional reflex-style viewfinder - e.g. mirrored left-
+            # right relative to what's actually saved - can be set up without affecting stills.
             camera_settings = settings.get("camera", {})
-            camera_transform = Transform(
-                hflip=camera_settings.get("hflip", False),
-                vflip=camera_settings.get("vflip", False),
+            base_hflip = camera_settings.get("hflip", False)
+            base_vflip = camera_settings.get("vflip", False)
+            viewfinder_settings = camera_settings.get("viewfinder", {})
+            capture_settings = camera_settings.get("capture", {})
+            viewfinder_transform = Transform(
+                hflip=viewfinder_settings.get("hflip", base_hflip),
+                vflip=viewfinder_settings.get("vflip", base_vflip),
+            )
+            capture_transform = Transform(
+                hflip=capture_settings.get("hflip", base_hflip),
+                vflip=capture_settings.get("vflip", base_vflip),
             )
 
             # An explicit optical crop to self.print_aspect, centered in the sensor's full pixel
@@ -196,13 +207,13 @@ class CustardCreamCamera(ReviewStationMixin):
 
             self.preview_config = self.picam2.create_preview_configuration(
                 main={"size": _largest_size_with_aspect(self.screen.WIDTH, self.content_height, self.print_aspect), "format": "BGR888"},
-                transform=camera_transform,
+                transform=viewfinder_transform,
                 controls=preview_controls,
             )
 
             self.still_config = self.picam2.create_still_configuration(
                 main={"size": (crop_w, crop_h), "format": "BGR888"},
-                transform=camera_transform,
+                transform=capture_transform,
                 controls={"ScalerCrop": self.print_crop},
             )
 

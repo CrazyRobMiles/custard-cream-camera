@@ -179,10 +179,25 @@ class CustardCreamCamera(ReviewStationMixin):
             # already at print_aspect, the ISP's scale down to either output size is always
             # uniform. _place_in_frame() (see lib/review_station.py) handles centering/
             # letterboxing either one on screen.
+            # Capping the preview frame rate matters on low-powered hardware: each frame drives
+            # a full copy/overlay/letterbox/encode/Tk-swap in process_frame(), and left uncapped
+            # this runs at the sensor mode's native rate (often 30-60fps+) - far faster than the
+            # on-screen viewfinder needs, and enough to starve Tkinter's event loop of time to
+            # process touch input, which is what makes buttons feel laggy/unresponsive. Setting
+            # it to None disables the cap. Trade-off: this also caps the longest exposure time
+            # AE/EV+ can reach (frame duration must be >= exposure time), so a very low preview_fps
+            # could clip EV+ headroom in dim scenes - 15fps leaves ~66ms, well above typical
+            # metered exposure times indoors/outdoors.
+            preview_controls = {"ScalerCrop": self.print_crop}
+            preview_fps = camera_settings.get("preview_fps", 15)
+            if preview_fps:
+                frame_duration_us = int(1_000_000 / preview_fps)
+                preview_controls["FrameDurationLimits"] = (frame_duration_us, frame_duration_us)
+
             self.preview_config = self.picam2.create_preview_configuration(
                 main={"size": _largest_size_with_aspect(self.screen.WIDTH, self.content_height, self.print_aspect), "format": "BGR888"},
                 transform=camera_transform,
-                controls={"ScalerCrop": self.print_crop},
+                controls=preview_controls,
             )
 
             self.still_config = self.picam2.create_still_configuration(
@@ -548,6 +563,13 @@ class CustardCreamCamera(ReviewStationMixin):
         )
 
     def process_frame(self):
+        # Snapshot before anything below runs a button handler (screen.update() dispatches
+        # down/up_handlers synchronously) - most Play-mode navigation handlers (show_play_image(),
+        # show_publish_menu(), etc., see lib/review_station.py) already call self.screen.draw()
+        # themselves. Without this, the "if dirty" redraw below would repaint the exact same
+        # frame a second time on every single tap - a real cost on slow hardware, and the
+        # dominant one in FTP mode, which has no live camera frame to compete with it.
+        draw_count_before_tick = self.screen.draw_count
 
         dirty = False
 
@@ -630,7 +652,7 @@ class CustardCreamCamera(ReviewStationMixin):
             self.finish_print()
             dirty = True
 
-        if dirty:
+        if dirty and self.screen.draw_count == draw_count_before_tick:
             if self.voice_recording:
                 self.screen.draw(self.status_frame(self.voice_partial_text or "Recording... release to send"))
             elif self.ai_pending:

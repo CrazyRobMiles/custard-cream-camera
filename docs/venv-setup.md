@@ -98,9 +98,19 @@ since it isn't safely installable on an FTP-only device with no `libcamera` OS p
 python -m pip install -r requirements-camera.txt
 ```
 
+**Only if `"ai_edit.input_method"` is `"voice"` and `"custard_cream.transcribe_provider"` is
+`"vosk"`** (see [Voice-Prompted AI Edits](voice-ai-edits.md)) — install `vosk` itself, kept in its
+own [requirements-vosk.txt](../requirements-vosk.txt) rather than the common `requirements.txt`,
+since it's a real cost (see below) not worth paying on a device that never uses it — e.g. a
+low-spec keyboard/preset-only image receiver:
+
+```bash
+python -m pip install -r requirements-vosk.txt
+```
+
 ## Installing Vosk (Local Speech Recognition)
 
-`vosk` (used for offline transcription in [Voice-Prompted AI Edits](voice-ai-edits.md)) is a normal PyPI package, already listed in `requirements.txt`, so `pip install -r requirements.txt` above installs it like everything else — no apt package needed, either mode. Prebuilt wheels are published for 64-bit Raspberry Pi OS (aarch64); older 32-bit (armv7) installs may need to build from source — a Raspberry Pi Zero W 2 (a common choice for FTP mode) is aarch64-capable but ships 32-bit Raspberry Pi OS by default, so check which image you're running before assuming a prebuilt wheel is available.
+`vosk` (used for offline transcription in [Voice-Prompted AI Edits](voice-ai-edits.md)) is a normal PyPI package, installed via `requirements-vosk.txt` above — no apt package needed, either mode. Prebuilt wheels are published for 64-bit Raspberry Pi OS (aarch64); older 32-bit (armv7) installs may need to build from source — a Raspberry Pi Zero W 2 (a common choice for FTP mode) is aarch64-capable but ships 32-bit Raspberry Pi OS by default, so check which image you're running before assuming a prebuilt wheel is available.
 
 Unlike the Python package, the **speech model itself is not installed by pip** — it's a separate download you place on disk yourself:
 
@@ -156,11 +166,12 @@ python3 -m venv --system-site-packages venv   # or plain "venv" for an FTP-mode 
 source venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pip install -r requirements-camera.txt   # camera mode only
+python -m pip install -r requirements-vosk.txt      # only if using voice input with the vosk provider
 ```
 
 ## Notes
 
 * Do not commit the `venv` folder to Git.
 * Add `venv/` to `.gitignore`.
-* `requirements.txt`/`requirements-camera.txt` should contain only packages installed via `pip`.
-* Raspberry Pi OS packages such as Picamera2 should be installed using `apt`, not added to either requirements file.
+* `requirements.txt`/`requirements-camera.txt`/`requirements-vosk.txt` should contain only packages installed via `pip`.
+* Raspberry Pi OS packages such as Picamera2 should be installed using `apt`, not added to any requirements file.

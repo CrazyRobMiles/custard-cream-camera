@@ -8,7 +8,8 @@
       "Bash(python -m py_compile custard_cream_camera.py)",
       "Bash(bash -c 'readlink -f \"-bash\"')",
       "Bash(awk '{print length\\($0\\)+1, $0}' custard-cream-camera.desktop)",
-      "Bash(python -m py_compile custard_cream_camera.py lib/review_station.py lib/transcription/__init__.py)"
+      "Bash(python -m py_compile custard_cream_camera.py lib/review_station.py lib/transcription/__init__.py)",
+      "Bash(python -m py_compile custard_cream_camera.py lib/displays/base.py lib/displays/hdmi_desktop_display.py lib/displays/widgets.py)"
     ]
   }
 }

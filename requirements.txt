@@ -1,7 +1,6 @@
 pillow
 numpy
 google-genai
-vosk
 evdev
 flickrapi
 atproto

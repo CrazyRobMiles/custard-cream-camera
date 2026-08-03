@@ -5,6 +5,11 @@ class BaseDisplay:
         self.WIDTH = width
         self.HEIGHT = height
         self.quit_requested = False
+        # Bumped by draw() every time it actually renders a frame - lets process_frame() tell
+        # whether a button handler already repainted the screen this tick (many Play-mode
+        # handlers - show_play_image(), show_publish_menu(), etc. - call draw() themselves)
+        # before falling back to its own redraw, instead of always redrawing a second time.
+        self.draw_count = 0
 
     def set_buttons(self, buttons):
         raise NotImplementedError

@@ -63,6 +63,8 @@ class HDMIDesktopDisplay(BaseDisplay):
         return self.buttons.update()
 
     def draw(self, img):
+        self.draw_count += 1
+
         # Copy before drawing buttons on - callers (e.g. self.play_view) keep their own
         # reference to img and redraw it again later; drawing buttons directly onto it would
         # permanently stamp that button set into the stored image itself.

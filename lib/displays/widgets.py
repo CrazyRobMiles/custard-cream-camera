@@ -135,7 +135,15 @@ class ButtonPanel:
     def __init__(self):
         self.buttons = []
         self._switched_at = 0.0
-        self._pressed_button = None
+        # Buttons currently down, oldest first - a list rather than a single slot because a
+        # second press can land before the first one's release does (a bounced/duplicate touch,
+        # or the user retapping because a sluggish redraw hasn't visibly responded yet). Each
+        # release() call resolves the oldest outstanding one, so a new press never silently
+        # discards a still-pending one - that used to leave the discarded button's `pressed`
+        # state stuck, and since menus reuse the same Button objects across switches (see
+        # set_buttons()), it could resurface later as a mismatched, delayed release for the
+        # wrong button.
+        self._pressed_buttons = []
 
     def set_buttons(self, buttons):
         for button in self.buttons:
@@ -144,7 +152,7 @@ class ButtonPanel:
         for button in self.buttons:
             button.enable()
         self._switched_at = time.monotonic()
-        # self._pressed_button is deliberately left alone here: buttons in this app act on
+        # self._pressed_buttons is deliberately left alone here: buttons in this app act on
         # press (down_handler), so the handler that just ran often *is* what called
         # set_buttons(), swapping this button out of self.buttons before its own physical
         # release has arrived. It still owes that button its release.
@@ -159,7 +167,8 @@ class ButtonPanel:
         for button in self.buttons:
             if button.check_coord(x, y):
                 button.set_down()
-                self._pressed_button = button
+                self._pressed_buttons.append(button)
+                return
 
     def release(self, x, y):
         # A finger pressing a button can drift outside its bounds before lifting, and/or
@@ -167,9 +176,10 @@ class ButtonPanel:
         # way the release belongs to whichever button is tracked as pressed, not whatever
         # is now under the release coordinate. This must bypass the switch guard below:
         # that guard exists for stray/untracked touches landing on the new panel, not for
-        # the very button whose press caused the switch.
-        if self._pressed_button is not None:
-            self._pressed_button.set_up()
+        # the very button whose press caused the switch. Resolves the oldest outstanding
+        # press first, matching physical touches in the order they went down.
+        if self._pressed_buttons:
+            self._pressed_buttons.pop(0).set_up()
             return
         if time.monotonic() - self._switched_at < self.SWITCH_GUARD_SECONDS:
             return
@@ -185,15 +195,15 @@ class ButtonPanel:
             if button.update():
                 dirty = True
 
-        # The pressed button may have been dropped from self.buttons by a panel switch
-        # before its release was drained above (see set_buttons()) - give it a chance too,
-        # so the touch_up_pending set by release() doesn't sit forever unprocessed.
-        pressed = self._pressed_button
-        if pressed is not None and id(pressed) not in seen:
-            if pressed.update():
-                dirty = True
-
-        if pressed is not None and not pressed.pressed and not pressed.touch_down_pending and not pressed.touch_up_pending:
-            self._pressed_button = None
+        # A pressed button may have been dropped from self.buttons by a panel switch
+        # before its release was drained above (see set_buttons()) - give each one still
+        # outstanding a chance too, so the touch_up_pending set by release() doesn't sit
+        # forever unprocessed.
+        for button in list(self._pressed_buttons):
+            if id(button) not in seen:
+                if button.update():
+                    dirty = True
+            if not button.pressed and not button.touch_down_pending and not button.touch_up_pending:
+                self._pressed_buttons.remove(button)
 
         return dirty

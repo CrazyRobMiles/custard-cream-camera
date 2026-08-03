@@ -56,7 +56,7 @@ skip them entirely for `"keyboard"` (or `"ai_edit.enabled": false`).
 
 1. **Get a Gemini API key.** Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey), sign in with a Google account, and create a key. This is needed for image editing regardless of transcription backend, and for transcription itself if you use `"gemini"`.
 
-2. **Make sure the SDKs are installed.** `google-genai` and `vosk` are both already in [requirements.txt](../requirements.txt), pulled in by the normal `pip install -r requirements.txt` venv setup — nothing extra needed unless your venv predates those being added.
+2. **Make sure the SDKs are installed.** `google-genai` is already in [requirements.txt](../requirements.txt), pulled in by the normal `pip install -r requirements.txt` venv setup. `vosk` is kept in its own [requirements-vosk.txt](../requirements-vosk.txt) instead (see [Setting Up the Python Virtual Environment](venv-setup.md)), since it's a real install/memory cost not worth paying on a device that never uses voice input — install it with `pip install -r requirements-vosk.txt` if you're using `"vosk"` as the provider.
 
 3. **Set the API key as an environment variable.** `NanoBananaClient.py` reads it from `GOOGLE_API_KEY` by default (the variable name is itself configurable via `"api_key_env"` under `"custard_cream"` in settings.json) — deliberately *not* stored in `settings.json`, since that file is checked into git. For a quick one-off test from a terminal:
    ```bash

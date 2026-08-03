@@ -2,8 +2,6 @@ class BasePublisher:
     """Common interface every publish backend must implement."""
 
     name = "publisher"
-    # Short label for the narrow (110px) Publish-menu buttons - full display names don't fit.
-    button_text = "Publish"
 
     def publish(self, image_path, tags=None, ai_instruction=None):
         """Uploads/posts image_path (a Path). Returns True on success, False on failure - or

@@ -340,11 +340,17 @@ class ReviewStationMixin:
             return
 
         path = self.play_images[self.play_index]
-        try:
-            self.play_view = self._place_in_frame(Image.open(path).convert("RGB"))
-        except Exception as e:
-            print(f"Could not load {path}: {e}")
-            self.play_view = self.status_frame("Could not load photo")
+        if path == self._play_view_cache_path:
+            self.play_view = self._play_view_cache_img
+        else:
+            try:
+                self.play_view = self._place_in_frame(Image.open(path).convert("RGB"))
+                self._play_view_cache_path = path
+                self._play_view_cache_img = self.play_view
+            except Exception as e:
+                print(f"Could not load {path}: {e}")
+                self.play_view = self.status_frame("Could not load photo")
+                self._play_view_cache_path = None
 
         self.screen.set_buttons(self.play_menu)
         self.screen.draw(self.play_view)
@@ -398,7 +404,10 @@ class ReviewStationMixin:
 
             absolute_index = page_start + i
             thumb_buttons.append(Button(
-                cell_x, cell_y, cell_w, cell_h, "", self.small_font, (0, 0, 0), (0, 0, 0),
+                # text is never drawn (visible=False - the thumbnail image is the visual), but
+                # Button.do_down()/do_up() print it regardless of visibility, so it still needs
+                # a real label - otherwise every grid tap logs a blank "Button:  pressed".
+                cell_x, cell_y, cell_w, cell_h, f"thumb{absolute_index}", self.small_font, (0, 0, 0), (0, 0, 0),
                 up_handler=None, down_handler=(lambda idx=absolute_index: self.select_play_grid_image(idx)), visible=False,
             ))
 

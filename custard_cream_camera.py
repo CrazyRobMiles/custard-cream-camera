@@ -299,6 +299,14 @@ class CustardCreamCamera(ReviewStationMixin):
         self.play_index = 0
         self.play_page = 0
         self.play_view = None
+        # Last (path, placed-and-letterboxed image) decoded by show_play_image() - every "Back"
+        # button in the app (grid/publish-menu/AI-picker) returns here without changing
+        # play_index, so without this show_play_image() would re-decode and re-resize the same
+        # full-resolution photo from disk on every single Back tap. Files in save_dir are never
+        # modified in place once written (edits/new captures always get a new path), so caching
+        # by path alone is safe - no mtime check needed.
+        self._play_view_cache_path = None
+        self._play_view_cache_img = None
         # Maps a saved ai_<timestamp>.jpg Path to the voice instruction that produced it, so
         # Publish can send it along as the picture's aiInstruction (see finish_ai_edit()/
         # run_publish()). Only populated for the current session - edits from a previous run

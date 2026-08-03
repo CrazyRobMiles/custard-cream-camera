@@ -17,7 +17,6 @@ class FlickrPublisher(BasePublisher):
     """
 
     name = "flickr"
-    button_text = "Flickr"
 
     def __init__(self, api_key_env="FLICKR_API_KEY", api_secret_env="FLICKR_API_SECRET",
                  tags="", is_public=True, token_cache_dir=None):

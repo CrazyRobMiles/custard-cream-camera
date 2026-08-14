@@ -98,7 +98,7 @@
             "api_key_env": "FLICKR_API_KEY",
             "api_secret_env": "FLICKR_API_SECRET",
             "tags": "custardcreamcamera",
-            "is_public": true,
+            "is_public": false,
             "token_cache_dir": null
         },
         "bsky": {

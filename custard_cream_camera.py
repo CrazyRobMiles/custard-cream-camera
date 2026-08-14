@@ -251,8 +251,10 @@ class CustardCreamCamera(ReviewStationMixin):
                     ("Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
                 )),
                 # Exposure compensation - tucked into the top corners since the bottom row is full.
-                Button(0, 0, 50, 40, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
-                Button(self.screen.WIDTH - 50, 0, 50, 40, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
+                comp_button_width = 80
+                comp_button_height = 80
+                Button(0, 0, comp_button_width, comp_button_height, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
+                Button(self.screen.WIDTH - comp_button_width, 0, comp_button_width, comp_button_height, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
             )
 
             # Play mode: reviews/acts on captures/ directly - Print/Speak or AI Edit/Publish

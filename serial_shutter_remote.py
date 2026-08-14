@@ -76,9 +76,11 @@ class SerialShutterRemote:
             self.connection = None
 
     def stop(self):
+        # Don't close self.connection here: it may be mid-readline() on the listener
+        # thread, and closing a pyserial port from another thread while a read is in
+        # flight crashes that read with a TypeError. Just flip the flag - readline()'s
+        # own timeout (1s) wakes the listener thread up so it notices and closes the
+        # connection itself, from the thread that owns it.
         self.running = False
-        if self.connection is not None:
-            try:
-                self.connection.close()
-            except Exception:
-                pass
+        if self.thread is not None:
+            self.thread.join(timeout=RETRY_SECONDS + 1)

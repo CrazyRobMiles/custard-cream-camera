@@ -242,6 +242,9 @@ class CustardCreamCamera(ReviewStationMixin):
             self.frame_ready = Event()
             self.request_next_frame()
 
+            comp_button_width = 80
+            comp_button_height = 80
+
             # Capture mode: live viewfinder, take a photo or switch to Play mode to review/act on
             # existing ones. There's no on-screen quit button any more - use keyboard 'q', or
             # Escape/window-close on the  MI backends.
@@ -251,8 +254,6 @@ class CustardCreamCamera(ReviewStationMixin):
                     ("Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
                 )),
                 # Exposure compensation - tucked into the top corners since the bottom row is full.
-                comp_button_width = 80
-                comp_button_height = 80
                 Button(0, 0, comp_button_width, comp_button_height, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
                 Button(self.screen.WIDTH - comp_button_width, 0, comp_button_width, comp_button_height, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
             )
@@ -458,10 +459,12 @@ class CustardCreamCamera(ReviewStationMixin):
                 specs.append(("AI Edit", self.play_button_font, (255, 255, 255), (0, 110, 0), None, self.show_ai_prompt_picker))
         specs.append(("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu))
 
+        side_button_width = 80
+        side_button_height = 80
         return (
             *self._row_of_buttons(button_y, 50, specs),
-            Button(0, 0, 50, 40, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
-            Button(self.screen.WIDTH - 50, 0, 50, 40, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
+            Button(0, 0, side_button_width, side_button_height, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
+            Button(self.screen.WIDTH - side_button_width, 0, side_button_width, side_button_height, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
             Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
             Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
         )

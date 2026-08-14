@@ -414,9 +414,9 @@ class ReviewStationMixin:
         self.play_view = canvas
 
         nav_buttons = self._row_of_buttons(button_y, 50, (
-            ("Left", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_prev_page),
-            ("Right", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_next_page),
-            ("Back", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image),
+            ("Older", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_next_page),
+            ("Newer", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_prev_page),
+            ("Done", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image),
         ))
         self.screen.set_buttons((*nav_buttons, *thumb_buttons))
         self.screen.draw(self.play_view)

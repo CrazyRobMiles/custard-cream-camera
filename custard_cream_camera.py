@@ -209,7 +209,7 @@ class CustardCreamCamera(ReviewStationMixin):
             # AE/EV+ can reach (frame duration must be >= exposure time), so a very low preview_fps
             # could clip EV+ headroom in dim scenes - 15fps leaves ~66ms, well above typical
             # metered exposure times indoors/outdoors.
-            preview_controls = {"ScalerCrop": self.print_crop}
+            preview_controls = {}
             preview_fps = camera_settings.get("preview_fps", 15)
             if preview_fps:
                 frame_duration_us = int(1_000_000 / preview_fps)
@@ -228,6 +228,31 @@ class CustardCreamCamera(ReviewStationMixin):
             )
 
             self.picam2.configure(self.preview_config)
+
+            # print_crop's coordinates were computed against sensor_resolution - the full pixel
+            # array of the sensor's highest-resolution mode, which create_still_configuration()
+            # picks for stills, so it applies there unchanged. The preview stream above is
+            # typically served by a different (binned/lower-resolution) mode though, with its own,
+            # smaller ScalerCrop bounds - handing it print_crop risks the rectangle landing outside
+            # those bounds and getting silently clamped by libcamera to whatever fits, which can
+            # leave it at something other than print_aspect. The ISP then has to stretch that
+            # wrong-aspect crop to fill the still-print_aspect main stream size, distorting the
+            # live preview (but not stills, which never hit this) - exactly what showed up as the
+            # viewfinder looking vertically stretched while Play-mode/printed photos looked right.
+            # Querying ScalerCrop's bounds only works once the mode is actually chosen, hence
+            # after configure() - and re-deriving the crop from *this* mode's own bounds keeps it
+            # both valid and print_aspect-correct for whatever mode is really active.
+            _, preview_crop_bounds, _ = self.picam2.camera_controls["ScalerCrop"]
+            mode_x, mode_y, mode_w, mode_h = preview_crop_bounds
+            preview_crop_w, preview_crop_h = _largest_size_with_aspect(mode_w, mode_h, self.print_aspect)
+            preview_crop = (
+                mode_x + (mode_w - preview_crop_w) // 2,
+                mode_y + (mode_h - preview_crop_h) // 2,
+                preview_crop_w,
+                preview_crop_h,
+            )
+            self.picam2.set_controls({"ScalerCrop": preview_crop})
+
             self.picam2.start()
 
             # Exposure compensation via the on-screen +/- buttons, for backlit subjects etc. The

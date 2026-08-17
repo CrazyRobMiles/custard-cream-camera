@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 # NanoBananaClient.py/print_overlays.py/ftp_server.py all live in ./lib, next to this file.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
-from displays import Button, create_display
+from displays import Button, colours, create_display
 from review_station import ReviewStationMixin
 from transcription import create_transcriber
 
@@ -260,12 +260,12 @@ class CustardCreamCamera(ReviewStationMixin):
             # Escape/window-close on the  MI backends.
             self.capture_menu = (
                 *self._row_of_buttons(button_y, 50, (
-                    ("Click", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.save_image),
-                    ("Play", self.medium_font, (255, 255, 255), (0, 90, 150), None, self.enter_play),
+                    ("Click", self.medium_font, colours.BUTTON_TEXT, colours.PRIMARY, None, self.save_image),
+                    ("Play", self.medium_font, colours.BUTTON_TEXT, colours.PLAY, None, self.enter_play),
                 )),
                 # Exposure compensation - tucked into the top corners since the bottom row is full.
-                Button(0, 0, comp_button_width, comp_button_height, "EV-", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(-self.ev_step)),
-                Button(self.screen.WIDTH - comp_button_width, 0, comp_button_width, comp_button_height, "EV+", self.small_font, (255, 255, 255), (60, 60, 60), None, lambda: self.adjust_exposure(self.ev_step)),
+                Button(0, 0, comp_button_width, comp_button_height, "EV-", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, lambda: self.adjust_exposure(-self.ev_step)),
+                Button(self.screen.WIDTH - comp_button_width, 0, comp_button_width, comp_button_height, "EV+", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, lambda: self.adjust_exposure(self.ev_step)),
             )
 
             # Play mode: reviews/acts on captures/ directly - Print/Speak or AI Edit/Publish
@@ -460,23 +460,23 @@ class CustardCreamCamera(ReviewStationMixin):
         """
         specs = []
         if self.has_camera:
-            specs.append(("Capture", self.play_button_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture))
-        specs.append(("Print", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.play_print))
+            specs.append(("Capture", self.play_button_font, colours.BUTTON_TEXT, colours.PRIMARY, None, self.enter_capture))
+        specs.append(("Print", self.play_button_font, colours.BUTTON_TEXT, colours.NEUTRAL, None, self.play_print))
         if self.ai_edit_enabled:
             if self.ai_input_method == "voice":
-                specs.append(("Speak", self.play_button_font, (255, 255, 255), (0, 110, 0), self.finish_play_voice_prompt, self.start_voice_prompt))
+                specs.append(("Speak", self.play_button_font, colours.BUTTON_TEXT, colours.CONFIRM, self.finish_play_voice_prompt, self.start_voice_prompt))
             else:
-                specs.append(("AI Edit", self.play_button_font, (255, 255, 255), (0, 110, 0), None, self.show_ai_prompt_picker))
-        specs.append(("Publish", self.play_button_font, (255, 255, 255), (150, 90, 0), None, self.show_publish_menu))
+                specs.append(("AI Edit", self.play_button_font, colours.BUTTON_TEXT, colours.CONFIRM, None, self.show_ai_prompt_picker))
+        specs.append(("Publish", self.play_button_font, colours.BUTTON_TEXT, colours.PUBLISH, None, self.show_publish_menu))
 
         side_button_width = 80
         side_button_height = 80
         return (
             *self._row_of_buttons(button_y, 50, specs),
-            Button(0, 0, side_button_width, side_button_height, "Stop", self.small_font, (255, 255, 255), (150, 30, 30), None, self.quit_app),
-            Button(self.screen.WIDTH - side_button_width, 0, side_button_width, side_button_height, "Page", self.small_font, (255, 255, 255), (60, 60, 60), None, self.show_play_grid),
-            Button(0, arrow_y, 32, 100, "<", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_prev_image),
-            Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, (255, 255, 255), (60, 60, 60), None, self.play_next_image),
+            Button(0, 0, side_button_width, side_button_height, "Stop", self.small_font, colours.BUTTON_TEXT, colours.DANGER, None, self.quit_app),
+            Button(self.screen.WIDTH - side_button_width, 0, side_button_width, side_button_height, "Page", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, self.show_play_grid),
+            Button(0, arrow_y, 32, 100, "<", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, self.play_prev_image),
+            Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, self.play_next_image),
         )
 
     # ------------------------------------------------------------
@@ -501,7 +501,7 @@ class CustardCreamCamera(ReviewStationMixin):
         if not self.has_camera:
             return ()
         return (
-            Button(0, button_y, self.screen.WIDTH, 50, "Capture", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.enter_capture),
+            Button(0, button_y, self.screen.WIDTH, 50, "Capture", self.medium_font, colours.BUTTON_TEXT, colours.PRIMARY, None, self.enter_capture),
         )
 
     def _empty_play_message(self):

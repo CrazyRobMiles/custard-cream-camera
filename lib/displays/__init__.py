@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from . import colours
 from .base import BaseDisplay
 from .widgets import Button
 
@@ -52,4 +53,4 @@ def create_display(settings=None):
     raise ValueError(f"Unknown display type: {display_type!r}")
 
 
-__all__ = ["BaseDisplay", "Button", "create_display"]
+__all__ = ["BaseDisplay", "Button", "colours", "create_display"]

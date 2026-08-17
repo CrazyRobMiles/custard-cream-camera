@@ -10,7 +10,7 @@ import cups
 import qrcode
 from PIL import Image, ImageDraw, ImageOps
 
-from displays import Button
+from displays import Button, colours
 from NanoBananaClient import CustardCreamClient
 from print_overlays import apply_datestamp, apply_watermark
 from publishers import available_publishers, create_publisher, publisher_label
@@ -50,9 +50,9 @@ class ReviewStationMixin:
     # Button colour per destination, shown in the publish menu - falls back to grey for any
     # publisher type not listed here.
     PUBLISH_MENU_COLOURS = {
-        "flickr": (150, 90, 0),
-        "bsky": (0, 133, 255),
-        "custard_cream_server": (120, 90, 40),
+        "flickr": colours.PUBLISH,
+        "bsky": colours.BSKY,
+        "custard_cream_server": colours.CUSTARD_CREAM_SERVER,
     }
 
     # ------------------------------------------------------------
@@ -407,16 +407,16 @@ class ReviewStationMixin:
                 # text is never drawn (visible=False - the thumbnail image is the visual), but
                 # Button.do_down()/do_up() print it regardless of visibility, so it still needs
                 # a real label - otherwise every grid tap logs a blank "Button:  pressed".
-                cell_x, cell_y, cell_w, cell_h, f"thumb{absolute_index}", self.small_font, (0, 0, 0), (0, 0, 0),
+                cell_x, cell_y, cell_w, cell_h, f"thumb{absolute_index}", self.small_font, colours.PRIMARY, colours.PRIMARY,
                 up_handler=None, down_handler=(lambda idx=absolute_index: self.select_play_grid_image(idx)), visible=False,
             ))
 
         self.play_view = canvas
 
         nav_buttons = self._row_of_buttons(button_y, 50, (
-            ("Older", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_next_page),
-            ("Newer", self.medium_font, (255, 255, 255), (0, 0, 0), None, self.play_grid_prev_page),
-            ("Done", self.medium_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image),
+            ("Older", self.medium_font, colours.BUTTON_TEXT, colours.PRIMARY, None, self.play_grid_next_page),
+            ("Newer", self.medium_font, colours.BUTTON_TEXT, colours.PRIMARY, None, self.play_grid_prev_page),
+            ("Done", self.medium_font, colours.BUTTON_TEXT, colours.NEUTRAL, None, self.show_play_image),
         ))
         self.screen.set_buttons((*nav_buttons, *thumb_buttons))
         self.screen.draw(self.play_view)
@@ -483,12 +483,12 @@ class ReviewStationMixin:
 
         button_y = self.screen.HEIGHT - 50
         specs = [
-            (label, self.play_button_font, (255, 255, 255),
-             self.PUBLISH_MENU_COLOURS.get(publisher_type, (90, 90, 90)), None,
+            (label, self.play_button_font, colours.BUTTON_TEXT,
+             self.PUBLISH_MENU_COLOURS.get(publisher_type, colours.NEUTRAL), None,
              lambda publisher_type=publisher_type: self.start_publish(publisher_type))
             for publisher_type, label in options
         ]
-        specs.append(("Back", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self.show_play_image))
+        specs.append(("Back", self.play_button_font, colours.BUTTON_TEXT, colours.NEUTRAL, None, self.show_play_image))
 
         self.screen.set_buttons(self._row_of_buttons(button_y, 50, specs))
         self.screen.draw(self.play_view)
@@ -674,7 +674,7 @@ class ReviewStationMixin:
         done_pressed = Event()
         button_y = self.screen.HEIGHT - 50
         done_button = Button(self.screen.WIDTH - 110, button_y, 110, 50, "Done", self.play_button_font,
-                              (255, 255, 255), (90, 90, 90), None, done_pressed.set)
+                              colours.BUTTON_TEXT, colours.NEUTRAL, None, done_pressed.set)
 
         self.screen.set_buttons((done_button,))
         self.screen.draw(img)
@@ -733,13 +733,13 @@ class ReviewStationMixin:
             label = self._truncate_button_label(text, self.play_button_font, cell_w - 20)
             preset_buttons.append(Button(
                 col * cell_w, row * cell_h, cell_w, cell_h, label, self.play_button_font,
-                (255, 255, 255), (60, 60, 90), None,
+                colours.BUTTON_TEXT, colours.PRESET, None,
                 lambda text=text: self._choose_ai_prompt(text),
             ))
 
         nav_buttons = self._row_of_buttons(button_y, 50, (
-            ("Custom...", self.play_button_font, (255, 255, 255), (90, 90, 90), None, self._choose_ai_prompt_custom),
-            ("Back", self.play_button_font, (255, 255, 255), (150, 30, 30), None, self.show_play_image),
+            ("Custom...", self.play_button_font, colours.BUTTON_TEXT, colours.NEUTRAL, None, self._choose_ai_prompt_custom),
+            ("Back", self.play_button_font, colours.BUTTON_TEXT, colours.DANGER, None, self.show_play_image),
         ))
 
         self.screen.set_buttons((*preset_buttons, *nav_buttons))
@@ -904,9 +904,9 @@ class ReviewStationMixin:
             choice["value"] = value
 
         buttons = self._row_of_buttons(self.screen.HEIGHT - 50, 50, (
-            ("Reject", self.play_button_font, (255, 255, 255), (150, 30, 30), None, lambda: pick("reject")),
-            ("Edit", self.play_button_font, (255, 255, 255), (90, 90, 90), None, lambda: pick("edit")),
-            ("Send", self.play_button_font, (255, 255, 255), (0, 110, 0), None, lambda: pick("send")),
+            ("Reject", self.play_button_font, colours.BUTTON_TEXT, colours.DANGER, None, lambda: pick("reject")),
+            ("Edit", self.play_button_font, colours.BUTTON_TEXT, colours.NEUTRAL, None, lambda: pick("edit")),
+            ("Send", self.play_button_font, colours.BUTTON_TEXT, colours.CONFIRM, None, lambda: pick("send")),
         ))
         self.screen.set_buttons(buttons)
         self.screen.draw(self.status_frame(text))
@@ -959,7 +959,7 @@ class ReviewStationMixin:
             for label, units, handler in specs:
                 width = round(units * unit)
                 buttons.append(Button(round(x), y, width, key_row_height, label, self.medium_font,
-                                       (255, 255, 255), (60, 60, 60), None, handler))
+                                       colours.BUTTON_TEXT, colours.UTILITY, None, handler))
                 x += units * unit
             return buttons
 
@@ -986,9 +986,9 @@ class ReviewStationMixin:
         ])
 
         action_buttons = self._row_of_buttons(self.screen.HEIGHT - 50, 50, (
-            ("Cancel", self.play_button_font, (255, 255, 255), (150, 30, 30), None, lambda: finish(initial_text)),
-            ("Clear", self.play_button_font, (255, 255, 255), (90, 90, 90), None, clear_text),
-            ("Done", self.play_button_font, (255, 255, 255), (0, 110, 0), None, lambda: finish(state["text"])),
+            ("Cancel", self.play_button_font, colours.BUTTON_TEXT, colours.DANGER, None, lambda: finish(initial_text)),
+            ("Clear", self.play_button_font, colours.BUTTON_TEXT, colours.NEUTRAL, None, clear_text),
+            ("Done", self.play_button_font, colours.BUTTON_TEXT, colours.CONFIRM, None, lambda: finish(state["text"])),
         ))
 
         self.screen.set_buttons((*row1, *row2, *row3, *row4, *action_buttons))

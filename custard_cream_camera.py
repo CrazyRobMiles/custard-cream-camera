@@ -195,6 +195,21 @@ class CustardCreamCamera(ReviewStationMixin):
             crop_w, crop_h = _largest_size_with_aspect(sensor_w, sensor_h, self.print_aspect)
             self.print_crop = ((sensor_w - crop_w) // 2, (sensor_h - crop_h) // 2, crop_w, crop_h)
 
+            # Left to its own defaults, Picamera2 picks whichever sensor mode can supply the
+            # requested preview main-stream size - for a small preview resolution that's often a
+            # genuinely cropped/windowed readout mode, not a full-field-of-view binned one,
+            # narrowing the preview's field of view relative to stills (which always use the
+            # full-resolution, and therefore full-FOV, mode). That mismatch shows up as the live
+            # viewfinder looking "zoomed in" next to what's actually printed. Pinning the preview
+            # to the smallest mode that still covers the full sensor FOV keeps the two in sync -
+            # still preview-sized, just not cropped. crop_limits gives each mode's available crop
+            # rectangle in native sensor coordinates, so the mode(s) tied for the largest one are
+            # exactly the full-FOV modes.
+            sensor_modes = self.picam2.sensor_modes
+            max_fov_area = max(m["crop_limits"][2] * m["crop_limits"][3] for m in sensor_modes)
+            full_fov_modes = [m for m in sensor_modes if m["crop_limits"][2] * m["crop_limits"][3] == max_fov_area]
+            preview_sensor_mode = min(full_fov_modes, key=lambda m: m["size"][0] * m["size"][1])
+
             # Both capture sizes are fit within the largest box available - the full crop for
             # stills, the on-screen content area for the live preview - and since the crop is
             # already at print_aspect, the ISP's scale down to either output size is always
@@ -219,6 +234,7 @@ class CustardCreamCamera(ReviewStationMixin):
                 main={"size": _largest_size_with_aspect(self.screen.WIDTH, self.content_height, self.print_aspect), "format": "BGR888"},
                 transform=viewfinder_transform,
                 controls=preview_controls,
+                sensor={"output_size": preview_sensor_mode["size"], "bit_depth": preview_sensor_mode["bit_depth"]},
             )
 
             self.still_config = self.picam2.create_still_configuration(
@@ -229,19 +245,16 @@ class CustardCreamCamera(ReviewStationMixin):
 
             self.picam2.configure(self.preview_config)
 
-            # print_crop's coordinates were computed against sensor_resolution - the full pixel
-            # array of the sensor's highest-resolution mode, which create_still_configuration()
-            # picks for stills, so it applies there unchanged. The preview stream above is
-            # typically served by a different (binned/lower-resolution) mode though, with its own,
-            # smaller ScalerCrop bounds - handing it print_crop risks the rectangle landing outside
-            # those bounds and getting silently clamped by libcamera to whatever fits, which can
-            # leave it at something other than print_aspect. The ISP then has to stretch that
-            # wrong-aspect crop to fill the still-print_aspect main stream size, distorting the
-            # live preview (but not stills, which never hit this) - exactly what showed up as the
-            # viewfinder looking vertically stretched while Play-mode/printed photos looked right.
-            # Querying ScalerCrop's bounds only works once the mode is actually chosen, hence
-            # after configure() - and re-deriving the crop from *this* mode's own bounds keeps it
-            # both valid and print_aspect-correct for whatever mode is really active.
+            # print_crop's coordinates were computed against sensor_resolution, the full-FOV
+            # mode picked above should honour them unclamped - but re-deriving the crop from
+            # this mode's own bounds (queryable only now, after configure(), once the mode is
+            # actually active) rather than assuming they match sensor_resolution exactly is a
+            # cheap belt-and-braces: if the two ever disagree, libcamera would otherwise silently
+            # clamp print_crop to whatever's valid, which can leave it at something other than
+            # print_aspect - and the ISP would then stretch that wrong-aspect crop to fill the
+            # still-print_aspect main stream size, distorting the live preview specifically (this
+            # is what previously showed up as the viewfinder looking vertically stretched while
+            # Play-mode/printed photos looked right).
             _, preview_crop_bounds, _ = self.picam2.camera_controls["ScalerCrop"]
             mode_x, mode_y, mode_w, mode_h = preview_crop_bounds
             preview_crop_w, preview_crop_h = _largest_size_with_aspect(mode_w, mode_h, self.print_aspect)

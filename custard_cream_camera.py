@@ -19,11 +19,20 @@ from review_station import ReviewStationMixin
 from transcription import create_transcriber
 
 SETTINGS_PATH = Path(__file__).parent / "settings.json"
+VERSION_PATH = Path(__file__).parent / "VERSION"
+GITHUB_URL = "https://github.com/CrazyRobMiles/custard-cream-camera"
 
 
 def load_settings():
     with open(SETTINGS_PATH) as f:
         return json.load(f)
+
+
+def load_version():
+    try:
+        return VERSION_PATH.read_text().strip()
+    except OSError:
+        return "unknown"
 
 
 def _largest_size_with_aspect(max_width, max_height, aspect):
@@ -84,6 +93,7 @@ class CustardCreamCamera(ReviewStationMixin):
         settings = load_settings()
         self.settings = settings
         self.app_dir = Path(__file__).resolve().parent
+        self.version = load_version()
         self.has_camera = settings.get("mode", "camera") == "camera"
 
         # Read early - both the still and live-preview capture sizes below are derived from this
@@ -696,9 +706,28 @@ class CustardCreamCamera(ReviewStationMixin):
             elif self.finder is not None:
                 self.screen.draw(self.live_frame())
 
+    def _splash_frame(self):
+        """Startup splash - version number and project URL, shown briefly by run() before the
+        live viewfinder/play view takes over, so a build's version is visible without digging
+        through files on the device."""
+        frame = Image.new("RGB", (self.screen.WIDTH, self.screen.HEIGHT), (0, 0, 0))
+        draw = ImageDraw.Draw(frame)
+        cx, cy = frame.width // 2, frame.height // 2
+        draw.text((cx, cy - 40), "Custard Cream Camera", font=self.large_font, fill=(255, 255, 255), anchor="mm")
+        draw.text((cx, cy + 10), f"Version {self.version}", font=self.medium_font, fill=(200, 200, 200), anchor="mm")
+        draw.text((cx, cy + 50), GITHUB_URL, font=self.small_font, fill=(120, 180, 255), anchor="mm")
+        return frame
+
     def run(self):
         self.running = True
         try:
+            # Blank the button row for the splash - self.screen.set_buttons() was already called
+            # in __init__ with whichever menu applies (capture_menu/play_menu), so without this
+            # those buttons would be drawn overlaid on the splash text.
+            self.screen.set_buttons(())
+            self.show_result(self._splash_frame(), hold_seconds=2)
+            self.screen.set_buttons(self.capture_menu if self.mode == "capture" else self.play_menu)
+
             while self.running:
 
                 self.process_frame()

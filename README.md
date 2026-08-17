@@ -49,3 +49,13 @@ Inspired by the camera made by [Nikbuild](https://github.com/nickbild/banamera)
 ## Hardware Setup Guides
 
 * [Canon SELPHY CP400 + CUPS](docs/printer-cups-setup.md) — get a CP400 dye-sublimation printer working with CUPS and Gutenprint on Raspberry Pi OS.
+
+## 3D-Printed Case
+
+STL files for the camera's enclosure are in [case/](case/) — print them and snap/screw the lids onto their matching bases:
+
+* **Controller** — `ControllerBase.stl` with `ControllerLid.stl`, `ControllerLeftLid.stl`, and `ControllerSpeakerLid.stl` (vented for the speaker).
+* **Battery** — `BatteryBase.stl` with `BatteryLidLeft.stl` and `BatteryLidRight.stl`, plus `batteryHolderLid.stl`.
+* **Printer** — `PrinterBase.stl` with `PrinterLidLeft.stl` and `PrinterLidRight.stl`, housing the SELPHY CP400.
+* **Handle** — `HandleBase.stl` with `HandleBaseLid.stl`.
+* **Paper** — `paperLid.stl` covers the printer's paper tray.

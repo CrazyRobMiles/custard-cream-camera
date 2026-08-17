@@ -1,7 +1,7 @@
 
 # Custard Cream Camera
 
-![Image of the camera and a large rubber duck](/images/camera.JPG)
+![Image of the camera and a large rubber duck](/images/camera.jpg)
 
 A camera-and-photo-review appliance for a small touchscreen Raspberry Pi build. Takes pictures (or receives them over FTP from a real camera), lets you review, print, publish, and voice-edit them with AI - and print them on a built-in printer. It can also publish pictures to Flickr, Bluesky, and a self-hosted Custard Cream Camera Server — pick which one from a menu on the Publish button.
 

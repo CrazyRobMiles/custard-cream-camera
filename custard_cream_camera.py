@@ -159,6 +159,7 @@ class CustardCreamCamera(ReviewStationMixin):
             # with the Pi camera stack/hardware actually installed - never attempted in FTP mode.
             from libcamera import Transform
             from picamera2 import Picamera2
+            from gpio_shutter_remote import GpioShutterRemote
             from serial_shutter_remote import SerialShutterRemote
             from shutter_remote import ShutterRemote
 
@@ -287,7 +288,7 @@ class CustardCreamCamera(ReviewStationMixin):
             # of giving a clean, repeatable +/- N stops from where AE actually metered the scene.
             self.exposure_baseline = None
 
-            self.frame_ready = Event()
+                
             self.request_next_frame()
 
             comp_button_width = 80
@@ -435,14 +436,16 @@ class CustardCreamCamera(ReviewStationMixin):
         self.publish_qr_result = None
 
         if self.has_camera:
-            # Shutter remotes - Bluetooth and/or wired USB-serial, either or both can be enabled at
-            # once (see settings.json's "shutter_remote"/"serial_remote" blocks). The Bluetooth
-            # remote's physical button sends a real press+release, so its "speak" key drives
-            # hold-to-talk the same way the on-screen Speak button does; the wired remote only ever
-            # sends a single-shot "click", so it's wired to remote_photo_requested only, the same
-            # event the Bluetooth remote's photo_key sets. All the Events below are set from a
-            # remote's background listener thread and only ever acted on in process_frame(), on the
-            # main thread, since drawing/Picamera2 calls aren't safe to make from a background thread.
+            # Shutter remotes - Bluetooth, wired USB-serial and/or a physical GPIO button, any or
+            # all of which can be enabled at once (see settings.json's "shutter_remote"/
+            # "serial_remote"/"gpio_remote" blocks). The Bluetooth remote's physical button sends a
+            # real press+release, so its "speak" key drives hold-to-talk the same way the on-screen
+            # Speak button does; the serial and GPIO remotes only ever send a single-shot "click",
+            # so they're wired to remote_photo_requested only, the same event the Bluetooth remote's
+            # photo_key sets. All the Events below are set from a remote's background listener
+            # thread (or, for the GPIO remote, gpiozero's own interrupt handler) and only ever acted
+            # on in process_frame(), on the main thread, since drawing/Picamera2 calls aren't safe
+            # to make from a background thread.
             remote_settings = settings.get("shutter_remote", {})
             self.remote_photo_requested = Event()
             self.remote_speak_down = Event()
@@ -475,6 +478,16 @@ class CustardCreamCamera(ReviewStationMixin):
                     baud_rate=serial_remote_settings.get("baud_rate", 9600),
                 )
                 self.serial_remote.start()
+
+            gpio_remote_settings = settings.get("gpio_remote", {})
+            self.gpio_remote = None
+            if gpio_remote_settings.get("enabled", False):
+                self.gpio_remote = GpioShutterRemote(
+                    pin=gpio_remote_settings.get("pin", 26),
+                    on_click=self.remote_photo_requested.set,
+                    active_low=gpio_remote_settings.get("active_low", True),
+                )
+                self.gpio_remote.start()
         else:
             from ftp_server import FTPReceiver
 
@@ -511,7 +524,15 @@ class CustardCreamCamera(ReviewStationMixin):
         side_button_height = 80
         return (
             *self._row_of_buttons(button_y, 50, specs),
-            Button(0, 0, side_button_width, side_button_height, "Stop", self.small_font, colours.BUTTON_TEXT, colours.DANGER, None, self.quit_app),
+            Button(0, 0, # position
+                   side_button_width, side_button_height, # size
+                   "Stop", # text
+                   self.small_font, # font
+                   colours.BUTTON_TEXT, # text colour
+                   colours.DANGER, # background colour
+                   None,  # called when released
+                   self.quit_app # called when pressed
+                   ),
             Button(self.screen.WIDTH - side_button_width, 0, side_button_width, side_button_height, "Page", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, self.show_play_grid),
             Button(0, arrow_y, 32, 100, "<", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, self.play_prev_image),
             Button(self.screen.WIDTH - 32, arrow_y, 32, 100, ">", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, self.play_next_image),
@@ -799,6 +820,8 @@ class CustardCreamCamera(ReviewStationMixin):
                     self.shutter_remote.stop()
                 if self.serial_remote is not None:
                     self.serial_remote.stop()
+                if self.gpio_remote is not None:
+                    self.gpio_remote.stop()
                 self.picam2.stop()
             else:
                 self.ftp_receiver.stop()

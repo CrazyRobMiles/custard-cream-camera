@@ -1,6 +1,6 @@
 # Shutter Remotes
 
-The app supports two independent physical shutter remotes — a Bluetooth one and a wired USB-serial one — each with its own `"enabled"` flag in [settings.json](../settings.json.example), so either or both can be active at once.
+The app supports three independent physical shutter remotes — a Bluetooth one, a wired USB-serial one, and a plain GPIO push-button — each with its own `"enabled"` flag in [settings.json](../settings.json.example), so any or all can be active at once.
 
 ## Bluetooth Shutter Remote
 
@@ -63,10 +63,31 @@ To enable it:
    `"baud_rate"` must match whatever the remote's firmware is actually configured to send at - 9600 is a common default, but check your specific device.
 3. Make sure your user can access serial ports: `sudo usermod -aG dialout $USER`, then log out and back in (or reboot) for group membership to take effect.
 
-This remote and the Bluetooth one are fully independent - both can be `"enabled": true` at once, each triggering the same photo action.
+This remote and the other two are fully independent - any combination can be `"enabled": true` at once, each triggering the same photo action.
 
 **Not being detected / nothing happens on click?** Like the Bluetooth remote, `serial_shutter_remote.py` retries opening the port every second if it's missing (unplugged, not yet enumerated at boot), so it should pick the remote up within a second or two of being plugged in - check the console/log for a `SerialShutterRemote: listening on ...` line to confirm it connected. If it connects but clicks don't register, confirm what the remote is actually sending, e.g.:
 ```bash
 screen /dev/ttyUSB0 9600
 ```
 (press the remote's button and confirm you see `click` printed; `Ctrl-A` `k` `y` to exit `screen`) - a mismatched baud rate typically shows up as garbled text rather than silence.
+
+## GPIO Shutter Remote
+
+For a switch wired directly to a GPIO pin on the Pi - no microcontroller/USB adapter needed. Implemented in [gpio_shutter_remote.py](../gpio_shutter_remote.py) using [gpiozero](https://gpiozero.readthedocs.io/), which handles debouncing itself, so the wiring can be as simple as a switch between the GPIO pin and ground.
+
+Like the serial remote, it's one button, one action - it always takes a photo, the same as pressing **Click** in Capture mode or, if you're currently in Play mode, switching back to Capture mode without taking a photo.
+
+To enable it, set `"gpio_remote"` in [settings.json](../settings.json.example):
+```json
+"gpio_remote": {
+    "enabled": true,
+    "pin": 26,
+    "active_low": true
+}
+```
+* `"pin"` is the BCM GPIO number (not the physical header pin number) the switch is wired to.
+* `"active_low"` should be `true` if the switch connects the pin to ground when pressed (the pin idles high via the Pi's internal pull-up resistor, and reads low when pressed) - this is the simplest wiring, needing nothing but a switch and two wires. Set it to `false` if the switch instead connects the pin to 3.3V when pressed (the pin idles low via the Pi's internal pull-down resistor, and reads high when pressed).
+
+This remote and the other two are fully independent - any combination can be `"enabled": true` at once, each triggering the same photo action.
+
+**Nothing happens on press?** Check the console/log for a `GpioShutterRemote: listening on GPIO<pin> (active low/high)` line at startup to confirm the pin opened - if it prints a "could not open" error instead, another process may already be using that pin, or the pin number may not exist on your Pi model. If it opened fine but presses don't register, double check `"active_low"` matches your wiring - a switch wired to ground with `"active_low": false` (or vice versa) will just look like the button is permanently held (or never pressed) rather than causing an obvious error.

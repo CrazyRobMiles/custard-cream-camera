@@ -56,6 +56,11 @@
         "port": "/dev/ttyUSB0",
         "baud_rate": 115200
     },
+    "gpio_remote": {
+        "enabled": false,
+        "pin": 26,
+        "active_low": true
+    },
     "audio_output": {
         "enabled": true,
         "device": null,

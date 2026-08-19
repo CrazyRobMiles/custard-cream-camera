@@ -288,7 +288,7 @@ class CustardCreamCamera(ReviewStationMixin):
             # of giving a clean, repeatable +/- N stops from where AE actually metered the scene.
             self.exposure_baseline = None
 
-                
+            self.frame_ready = Event()
             self.request_next_frame()
 
             comp_button_width = 80

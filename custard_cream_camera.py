@@ -175,6 +175,15 @@ class CustardCreamCamera(ReviewStationMixin):
             base_vflip = camera_settings.get("vflip", False)
             viewfinder_settings = camera_settings.get("viewfinder", {})
             capture_settings = camera_settings.get("capture", {})
+
+            # Auto-switch to Play mode after Capture mode sits idle for a while - Capture mode
+            # keeps the sensor streaming continuously (see enter_play()/enter_capture() in
+            # lib/review_station.py and this file), which is the expensive state to be left in
+            # unattended. Off by default since it changes on-screen behavior, not just performance.
+            idle_timeout_settings = camera_settings.get("idle_timeout", {})
+            self.idle_timeout_enabled = idle_timeout_settings.get("enabled", False)
+            self.idle_timeout_seconds = idle_timeout_settings.get("seconds", 60)
+            self.last_capture_activity = time.monotonic()
             viewfinder_transform = Transform(
                 hflip=viewfinder_settings.get("hflip", base_hflip),
                 vflip=viewfinder_settings.get("vflip", base_vflip),
@@ -576,6 +585,7 @@ class CustardCreamCamera(ReviewStationMixin):
         if new_value == self.exposure_value:
             return
         self.exposure_value = new_value
+        self.last_capture_activity = time.monotonic()
 
         if self.exposure_value == 0:
             self.exposure_baseline = None
@@ -604,6 +614,7 @@ class CustardCreamCamera(ReviewStationMixin):
         self.picam2.set_controls(controls)
 
     def save_image(self):
+        self.last_capture_activity = time.monotonic()
         ts = time.strftime("%Y%m%d_%H%M%S")
         self.save_file_name = self.save_dir / f"capture_{ts}.jpg"
         self.picam2.switch_mode_and_capture_file(self.still_config, str(self.save_file_name))
@@ -628,6 +639,7 @@ class CustardCreamCamera(ReviewStationMixin):
             self.picam2.start()
             self.camera_streaming = True
             self.request_next_frame()
+        self.last_capture_activity = time.monotonic()
         self.screen.set_buttons(self.capture_menu)
         if self.finder is not None:
             self.screen.draw(self.live_frame())
@@ -712,6 +724,21 @@ class CustardCreamCamera(ReviewStationMixin):
             if self.remote_speak_up.is_set():
                 self.remote_speak_up.clear()
                 self.finish_voice_prompt()
+
+            if (
+                self.idle_timeout_enabled
+                and self.mode == "capture"
+                and not self.voice_recording
+                and not self.ai_pending
+                and not self.publish_pending
+                and not self.print_pending
+                and time.monotonic() - self.last_capture_activity >= self.idle_timeout_seconds
+            ):
+                # Capture mode left untouched for a while - switch to Play, which stops the
+                # camera (see enter_play()), rather than leaving the sensor streaming
+                # unattended. Guarded against the busy states above so it can't cut in mid
+                # voice-recording/AI-edit/publish/print.
+                self.enter_play()
         else:
             while True:
                 try:

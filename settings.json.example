@@ -36,7 +36,11 @@
     },
     "camera": {
         "hflip": false,
-        "vflip": false
+        "vflip": false,
+        "idle_timeout": {
+            "enabled": false,
+            "seconds": 60
+        }
     },
     "exposure": {
         "default": 0.0,

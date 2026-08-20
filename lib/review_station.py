@@ -784,6 +784,11 @@ class ReviewStationMixin:
     def start_voice_prompt(self):
         if self.ai_pending or self.print_pending:
             return
+        if self.has_camera and self.mode == "capture":
+            # Remote-triggered Speak bypasses the on-screen capture_menu buttons entirely, so it
+            # needs its own idle-timer reset - see self.last_capture_activity in
+            # custard_cream_camera.py.
+            self.last_capture_activity = time.monotonic()
         try:
             self.transcriber.start(on_partial=self._on_voice_partial)
         except Exception as e:

@@ -268,6 +268,11 @@ class CustardCreamCamera(ReviewStationMixin):
             self.picam2.set_controls({"ScalerCrop": preview_crop})
 
             self.picam2.start()
+            # Tracks whether the sensor is actually streaming - Play mode stops it (see
+            # enter_play() in lib/review_station.py) since the live feed is never shown there,
+            # and this is what enter_capture()/process_frame() check to know whether to restart
+            # it and resume pumping capture_request()s.
+            self.camera_streaming = True
 
             # Exposure compensation via the on-screen +/- buttons, for backlit subjects etc. The
             # libcamera "ExposureValue" control (the "correct" way to bias AE without disabling it)
@@ -619,6 +624,10 @@ class CustardCreamCamera(ReviewStationMixin):
 
     def enter_capture(self):
         self.mode = "capture"
+        if self.has_camera and not self.camera_streaming:
+            self.picam2.start()
+            self.camera_streaming = True
+            self.request_next_frame()
         self.screen.set_buttons(self.capture_menu)
         if self.finder is not None:
             self.screen.draw(self.live_frame())
@@ -667,7 +676,7 @@ class CustardCreamCamera(ReviewStationMixin):
         dirty = False
 
         if self.has_camera:
-            if self.frame_ready.is_set():
+            if self.camera_streaming and self.frame_ready.is_set():
                 self.frame_ready.clear()
                 request = self.picam2.wait(self.pending_job)
                 frame = request.make_array("main")
@@ -806,9 +815,10 @@ class CustardCreamCamera(ReviewStationMixin):
                         else:
                             self.save_image()
 
-                if not self.has_camera:
-                    # Nothing paces this loop in FTP mode the way frame_ready does in camera
-                    # mode - avoid spinning at full CPU polling an empty queue.
+                if not self.has_camera or not self.camera_streaming:
+                    # Nothing paces this loop in FTP mode, or in Play mode once the camera's
+                    # stopped (see enter_play()), the way frame_ready does while the camera is
+                    # actively streaming - avoid spinning at full CPU polling empty state.
                     time.sleep(0.02)
 
         except KeyboardInterrupt:

@@ -318,6 +318,15 @@ class ReviewStationMixin:
         """Always lands on the most recently taken/received photo - see show_play_image()."""
         if self.ai_pending or self.publish_pending or self.print_pending:
             return
+        if self.has_camera and self.camera_streaming:
+            # Play mode never shows the live feed - stopping the sensor here (rather than just
+            # leaving capture_request() unpumped) is what actually cuts the CPU/battery cost,
+            # since libcamera keeps the ISP running at full tilt as long as the camera is
+            # started, whether or not anything's requesting frames from it. enter_capture()
+            # (custard_cream_camera.py) restarts it on the way back.
+            self.picam2.stop()
+            self.camera_streaming = False
+            self.frame_ready.clear()
         self.play_page = 0
         self.play_images = sorted(
             (p for p in self.save_dir.glob("*.jpg") if p.name != "ai_source.jpg"),

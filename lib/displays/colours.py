@@ -19,6 +19,6 @@ PUBLISH = (150, 90, 0)         # Publish menu, Flickr
 PRESET = (60, 60, 90)          # AI-edit preset prompt buttons
 
 # Per-publisher accents, keyed by publisher type - shown in the Publish destination menu
-# (PUBLISH_MENU_COLOURS in lib/review_station.py).
+# (PUBLISH_MENU_COLOURS in custard_cream_camera.py).
 BSKY = (0, 133, 255)
 CUSTARD_CREAM_SERVER = (120, 90, 40)

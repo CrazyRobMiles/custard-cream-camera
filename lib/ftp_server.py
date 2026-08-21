@@ -1,6 +1,6 @@
 """Receives JPEGs uploaded by the camera's FTP-transfer feature and hands each one to the main
 app as it completes, via a thread-safe queue - the same "background thread signals the main
-thread" shape used throughout lib/review_station.py for publish/print/AI-edit work.
+thread" shape used throughout custard_cream_camera.py for publish/print/AI-edit work.
 """
 
 from pathlib import Path

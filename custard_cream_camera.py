@@ -1915,6 +1915,14 @@ class CustardCreamCamera:
             self.screen.set_buttons(())
             self.show_result(self._splash_frame(), hold_seconds=2)
             self.screen.set_buttons(self.capture_menu if self.mode == "capture" else self.play_menu)
+            if self.mode in ("play", "play_grid"):
+                # Camera mode self-heals: the live viewfinder marks itself dirty every frame
+                # once streaming resumes, so the splash gets painted over within one frame
+                # period regardless. Play mode (FTP mode's resting screen, always landed on via
+                # enter_play() before the splash was drawn over it) has no such heartbeat -
+                # process_frame() only redraws on a button press or an incoming photo - so
+                # without this the splash would stay on screen indefinitely.
+                self.screen.draw(self.play_view)
 
             while self.running:
 

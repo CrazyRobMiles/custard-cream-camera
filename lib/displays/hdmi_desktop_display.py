@@ -24,7 +24,15 @@ class HDMIDesktopDisplay(BaseDisplay):
         self.root.configure(bg="black")
 
         if fullscreen:
+            # On the very first launch after the desktop session has just started, the window
+            # manager can still be getting itself set up and silently drops a fullscreen
+            # request made before it has finished managing the window - the app then shows up
+            # small, and only goes fullscreen on a later run once the WM has settled. Forcing
+            # the window to exist (update_idletasks) before asking for fullscreen, and
+            # re-asserting it shortly after, works around that race.
+            self.root.update_idletasks()
             self.root.attributes("-fullscreen", True)
+            self.root.after(250, lambda: self.root.attributes("-fullscreen", True))
             screen_w = self.root.winfo_screenwidth()
             screen_h = self.root.winfo_screenheight()
             self.scale = min(screen_w / self.WIDTH, screen_h / self.HEIGHT)

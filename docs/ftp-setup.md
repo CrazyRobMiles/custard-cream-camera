@@ -1,6 +1,6 @@
 # Receiving Photos over FTP
 
-The Sony A7R IV can upload JPEGs (optionally alongside RAW) to an FTP server automatically after each shot, or on demand for selected images, via its built-in FTP-transfer feature. This app runs that FTP server - [lib/ftp_server.py](../lib/ftp_server.py), built on [pyftpdlib](https://pyftpdlib.readthedocs.io/) - and shows each upload as it arrives, using the same review/print/publish/voice-edit flow as camera mode's Play mode (see [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md)).
+The Sony A7R IV can upload JPEGs (optionally alongside RAW) to an FTP server automatically after each shot, or on demand for selected images, via its built-in FTP-transfer feature. This app runs that FTP server - [lib/ftp_server.py](../lib/ftp_server.py), built on [pyftpdlib](https://pyftpdlib.readthedocs.io/) - whenever `settings.json`'s `"mode"` is `"ftp"` or `"camera_ftp"`, and shows each upload as it arrives, using the same review/print/publish/voice-edit flow as camera mode's Play mode (see [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md)).
 
 ## Configuring the app
 

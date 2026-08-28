@@ -5,10 +5,19 @@
 
 A camera-and-photo-review appliance for a small touchscreen Raspberry Pi build. Takes pictures (or receives them over FTP from a real camera), lets you review, print, publish, and voice-edit them with AI - and print them on a built-in printer. It can also publish pictures to Flickr, Bluesky, and a self-hosted Custard Cream Camera Server — pick which one from a menu on the Publish button.
 
+[![YouTube Screenshot](images/youtube.png)](https://youtu.be/TUCZbDL9_Vs)
+
+To find out more about the camera click on the image above to see a short video.
+
+## Camera configuration
+
+You can use the camera as a camera, or you can use it as an FTP server which other cameras can connect to. All the image storage, processing and printing features are available in this mode. If you are not sure what any of this means, use it in camera mode. 
+
 `settings.json`'s top-level `"mode"` key picks the home screen:
 
 * **`"mode": "camera"`** — a live viewfinder with **Capture**/**Play** modes: take a photo with the on-screen button, a Bluetooth/wired shutter remote, or the keyboard spacebar.
 * **`"mode": "ftp"`** — no camera: this device receives JPEGs over FTP (e.g. from a Sony camera's FTP-transfer feature) and is always in Play mode, showing the newest arrival first.
+* **`"mode": "camera_ftp"`** — both at once: the live viewfinder/Capture-Play flow of `"camera"` mode, plus the FTP receiver of `"ftp"` mode running in the background. A photo arriving over FTP jumps to the front and interrupts Capture/Play immediately, the same way it does in plain `"ftp"` mode.
 
 Either way, reviewing, printing, publishing, and voice-editing photos already in `captures/` is exactly the same code and behavior — see [Home Screen: Camera Mode vs FTP Mode](docs/home-screen-modes.md).
 
@@ -42,7 +51,7 @@ something specific.
 * [Shutter Remotes](docs/shutter-remote.md) — trigger photos and voice edits from a Bluetooth or wired USB-serial remote instead of the touchscreen; either or both can be enabled at once.
 * [Audio Output (Shutter Sound)](docs/audio-output.md) — a click sound plays when a photo is taken, configurable and safe to enable even with no audio hardware present.
 
-**FTP mode:**
+**FTP mode (and `camera_ftp`):**
 
 * [Receiving Photos over FTP](docs/ftp-setup.md) — configuring the sending camera's FTP-transfer feature to talk to this app, and how uploads get turned into previewable photos.
 

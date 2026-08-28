@@ -98,16 +98,22 @@ class Keyboard:
 
 
 class CustardCreamCamera:
-    """Two home screens, picked by settings.json's "mode":
+    """Home screen(s) picked by settings.json's "mode":
 
-    - "camera" (self.has_camera=True): a live Picamera2 viewfinder with Capture/Play modes.
-    - "ftp" (self.has_camera=False): no camera - photos arrive over FTP (see lib/ftp_server.py)
-      and the app is always in Play/play_grid, starting on a "waiting for photos" placeholder.
+    - "camera" (self.has_camera=True, self.has_ftp=False): a live Picamera2 viewfinder with
+      Capture/Play modes.
+    - "ftp" (self.has_camera=False, self.has_ftp=True): no camera - photos arrive over FTP (see
+      lib/ftp_server.py) and the app is always in Play/play_grid, starting on a "waiting for
+      photos" placeholder.
+    - "camera_ftp" (both True): a live Picamera2 viewfinder like camera mode, plus the FTP
+      receiver running in the background - an FTP upload interrupts Capture/Play the same way it
+      does in "ftp" mode, landing back in Capture mode is unaffected.
 
     Either way, reviewing/printing/publishing/voice-editing photos already in save_dir - the
     "review station" methods below (Play mode, printing, publishing, the voice/keyboard AI-edit
     flow) - is exactly the same regardless of mode; only the few methods under "Camera-mode hooks"
-    branch on self.has_camera.
+    branch on self.has_camera, and the FTP receiver's own setup/polling/teardown branch on
+    self.has_ftp.
     """
 
     # Button colour per destination, shown in the publish menu - falls back to grey for any
@@ -123,7 +129,9 @@ class CustardCreamCamera:
         self.settings = settings
         self.app_dir = Path(__file__).resolve().parent
         self.version = load_version()
-        self.has_camera = settings.get("mode", "camera") == "camera"
+        mode_setting = settings.get("mode", "camera")
+        self.has_camera = mode_setting in ("camera", "camera_ftp")
+        self.has_ftp = mode_setting in ("ftp", "camera_ftp")
 
         # Read early - both the still and live-preview capture sizes below are derived from this
         # (not the sensor's native aspect, not the screen's own aspect), so what's framed live
@@ -349,17 +357,14 @@ class CustardCreamCamera:
                 Button(self.screen.WIDTH - comp_button_width, 0, comp_button_width, comp_button_height, "EV+", self.small_font, colours.BUTTON_TEXT, colours.UTILITY, None, lambda: self.adjust_exposure(self.ev_step)),
             )
 
-            # Play mode: reviews/acts on captures/ directly - Print/Speak or AI Edit/Publish
-            # always target whatever's currently selected (self.play_index), no separate
-            # "choose, then act" step. Left/Right step through images one at a time; Page opens
-            # a 3x3 grid to jump further.
-            self.play_menu = self._build_play_menu(button_y, arrow_y)
-
             self.screen.set_buttons(self.capture_menu)
-        else:
-            # No "Capture" button - there's no other mode to switch to, since this app never
-            # captures anything itself in FTP mode.
-            self.play_menu = self._build_play_menu(button_y, arrow_y)
+
+        # Play mode: reviews/acts on captures/ directly - Print/Speak or AI Edit/Publish always
+        # target whatever's currently selected (self.play_index), no separate "choose, then act"
+        # step. Left/Right step through images one at a time; Page opens a 3x3 grid to jump
+        # further. Built regardless of mode - _build_play_menu() itself only adds a "Capture"
+        # button when self.has_camera is set, so a camera-less "ftp" mode gets none.
+        self.play_menu = self._build_play_menu(button_y, arrow_y)
 
         self.save_dir = Path("captures")
         self.save_dir.mkdir(exist_ok=True)
@@ -530,7 +535,8 @@ class CustardCreamCamera:
                     active_low=gpio_remote_settings.get("active_low", True),
                 )
                 self.gpio_remote.start()
-        else:
+
+        if self.has_ftp:
             from ftp_server import FTPReceiver
 
             # FTP receiver - runs on its own background thread; on_file_received() (see
@@ -540,14 +546,18 @@ class CustardCreamCamera:
             self.ftp_receiver = FTPReceiver(settings.get("ftp", {}), self.save_dir, self.incoming_queue)
             self.ftp_receiver.start()
 
-            # Picks up anything already in save_dir (e.g. left over from a previous run) and shows
-            # the newest, or the "waiting for photos" placeholder if there's nothing yet.
+        if not self.has_camera:
+            # Camera-less "ftp" mode has no Capture mode to start in - picks up anything already
+            # in save_dir (e.g. left over from a previous run) and shows the newest, or the
+            # "waiting for photos" placeholder if there's nothing yet. "camera_ftp" mode starts in
+            # Capture mode instead (self.mode below), same as plain "camera" mode.
             self.enter_play()
 
     def _build_play_menu(self, button_y, arrow_y):
         """Play mode's button row plus the Stop/Page corner buttons and </>edge buttons - shared
-        between camera mode (Capture button included) and FTP mode (no Capture, nothing else to
-        switch to). Branches on ai_edit settings for the third button: hold-to-talk "Speak" for
+        across all three modes: a "Capture" button is included whenever self.has_camera (plain
+        "camera" mode and "camera_ftp"), omitted when there's no camera to switch back to (plain
+        "ftp" mode). Branches on ai_edit settings for the third button: hold-to-talk "Speak" for
         the "voice" input method, a tap-to-open-picker "AI Edit" for "keyboard", or omitted
         entirely when ai_edit.enabled is false.
         """
@@ -1832,7 +1842,8 @@ class CustardCreamCamera:
                 # unattended. Guarded against the busy states above so it can't cut in mid
                 # voice-recording/AI-edit/publish/print.
                 self.enter_play()
-        else:
+
+        if self.has_ftp:
             while True:
                 try:
                     new_path = self.incoming_queue.get_nowait()
@@ -1961,7 +1972,7 @@ class CustardCreamCamera:
                 if self.gpio_remote is not None:
                     self.gpio_remote.stop()
                 self.picam2.stop()
-            else:
+            if self.has_ftp:
                 self.ftp_receiver.stop()
             self.screen.close()
             self.kbd.close()

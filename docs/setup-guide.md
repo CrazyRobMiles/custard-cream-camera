@@ -17,6 +17,8 @@ steps below:
 * **`"camera"`** — a live viewfinder with Capture/Play modes; this device has a Pi camera attached.
 * **`"ftp"`** — no camera; this device receives JPEGs over FTP from a real camera (e.g. a Sony
   body's FTP-transfer feature) and is always in Play mode.
+* **`"camera_ftp"`** — both: a Pi camera *and* the FTP receiver running at the same time. Follow
+  every step below tagged either **[camera mode]** or **[FTP mode]** — skip nothing.
 
 See [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md) for exactly what differs. Steps
 below are marked **[camera mode]** or **[FTP mode]** where they only apply to one.
@@ -31,7 +33,10 @@ cd custard-cream-camera
 ## 3. Install system packages
 
 These come from `apt`, not `pip` — see [Setting Up the Python Virtual Environment](venv-setup.md)
-for why `picamera2` in particular has to be installed this way.
+for why `picamera2` in particular has to be installed this way. (`"camera_ftp"` devices: follow
+**[camera mode]** here and in steps 4-5 below — it's a strict superset of what **[FTP mode]** needs,
+since the FTP receiver's own dependency, `pyftpdlib`, is a `pip` package already in the common
+`requirements.txt`, not an `apt` one.)
 
 **[camera mode]**
 ```bash
@@ -96,7 +101,7 @@ python -m pip install -r requirements-vosk.txt
 cp settings.json.example settings.json
 ```
 
-Set `"mode"` to `"camera"` or `"ftp"` per step 1. Everything below edits this same file — it's
+Set `"mode"` to `"camera"`, `"ftp"`, or `"camera_ftp"` per step 1. Everything below edits this same file — it's
 listed in `.gitignore`, so it's device-local config: a `git pull` on this device never overwrites
 it, and none of the values you set below get committed back to the repo.
 

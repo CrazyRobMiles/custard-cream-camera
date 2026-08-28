@@ -1,8 +1,8 @@
 # Home Screen: Camera Mode vs FTP Mode
 
-`settings.json`'s top-level `"mode"` key (`"camera"` or `"ftp"`) picks which home screen this app
-shows. Everything else — reviewing, printing, publishing, and voice-editing photos already in
-`captures/` — works identically either way; only how photos *arrive* differs.
+`settings.json`'s top-level `"mode"` key (`"camera"`, `"ftp"`, or `"camera_ftp"`) picks which home
+screen this app shows. Everything else — reviewing, printing, publishing, and voice-editing photos
+already in `captures/` — works identically across all three; only how photos *arrive* differs.
 
 ## Camera mode (`"mode": "camera"`)
 
@@ -89,3 +89,20 @@ restart) and shows the newest, the same as the first-arrival case.
 
 There's no live viewfinder, no exposure compensation, and no shutter button in this mode - it never
 takes a photo itself, only receives ones already taken.
+
+## Camera + FTP mode (`"mode": "camera_ftp"`)
+
+Both of the above at once: the live viewfinder and Capture/Play flow from Camera mode, plus the FTP
+receiver from FTP mode running in the background the whole time - see
+[Receiving Photos over FTP](ftp-setup.md) for configuring the sending camera's side. The app starts
+in Capture mode, same as plain Camera mode.
+
+A photo arriving over FTP behaves exactly as described in
+[When a new photo arrives](#when-a-new-photo-arrives) above - it jumps to the front and interrupts
+whatever's on screen (Capture mode's live viewfinder included), the same way it would in plain FTP
+mode. The live viewfinder itself keeps running in the background while that photo is shown; press
+**Capture** to go back to it.
+
+This is useful when you want the device's own camera and an external camera's FTP-transfer feature
+(e.g. a Sony body) both feeding the same `captures/` folder and review flow, rather than choosing
+one or the other.

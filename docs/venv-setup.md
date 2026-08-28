@@ -4,7 +4,9 @@ This app always runs inside a Python virtual environment — everything below ha
 nothing is installed into the system Python. What you install depends on which `"mode"` (see
 [Home Screen: Camera Mode vs FTP Mode](home-screen-modes.md)) this device will run in — a
 camera-mode device needs the Pi's camera stack, an FTP-mode device doesn't need anything camera
--related at all.
+-related at all. A `"camera_ftp"`-mode device needs the camera stack too — follow the **Camera
+mode** instructions throughout this doc; `pyftpdlib` (the FTP receiver) is already in the common
+`requirements.txt`, so no separate install step is needed for the FTP side.
 
 If you run this app on more than one device (one in camera mode, one in FTP mode), each device gets
 its own independent venv at its own clone of this repo — there's no environment shared between them.
